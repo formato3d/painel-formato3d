@@ -225,6 +225,9 @@
   .field textarea{ resize:vertical; min-height:56px; }
   .form-actions{ display:flex; gap:8px; margin-top:6px; }
   .form-row-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+  .checkbox-row{ display:flex; flex-wrap:wrap; gap:8px 16px; padding:9px 2px; }
+  .checkbox-row .chk{ display:flex; align-items:center; gap:6px; font-size:13px; font-weight:normal; color:var(--text); cursor:pointer; }
+  .checkbox-row .chk input{ width:auto; accent-color:var(--navy); cursor:pointer; }
 
   /* ===== Upload de foto ===== */
   .photo-upload{
@@ -668,6 +671,28 @@
         </div>
       </div>
 
+      <div class="form-row-2">
+        <div class="field">
+          <label>Condições de pagamento</label>
+          <select id="foCondicaoPagamento" onchange="alternarCondicaoOutro()">
+            <option value="À vista">À vista</option>
+            <option value="50% no pedido e 50% na entrega">50% no pedido e 50% na entrega</option>
+            <option value="100% na entrega">100% na entrega</option>
+            <option value="outro">Outro (digitar forma combinada)</option>
+          </select>
+          <input id="foCondicaoOutro" class="hidden" style="margin-top:6px;" placeholder="Digite a condição combinada">
+        </div>
+        <div class="field">
+          <label>Forma de pagamento</label>
+          <div class="checkbox-row">
+            <label class="chk"><input type="checkbox" class="fo-forma-pag" value="Pix"> Pix</label>
+            <label class="chk"><input type="checkbox" class="fo-forma-pag" value="Débito"> Débito</label>
+            <label class="chk"><input type="checkbox" class="fo-forma-pag" value="Crédito"> Crédito</label>
+            <label class="chk"><input type="checkbox" class="fo-forma-pag" value="Dinheiro"> Dinheiro</label>
+          </div>
+        </div>
+      </div>
+
       <table class="itens-orc">
         <thead><tr><th style="width:70px">Cód.</th><th>Produto / descrição</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead>
         <tbody id="corpoItensOrc"></tbody>
@@ -785,6 +810,7 @@ Obrigado pela preferência!</textarea></div>
   <table class="po-client">
     <tr><td class="label">Cliente</td><td id="poCliente"></td><td class="label">Telefone</td><td id="poTelefone"></td></tr>
     <tr><td class="label">E-mail</td><td id="poEmail"></td><td class="label">Cidade</td><td id="poCidade"></td></tr>
+    <tr><td class="label">Forma de pagamento</td><td id="poFormaPagamento"></td><td class="label">Condições</td><td id="poCondicaoPagamento"></td></tr>
   </table>
 
   <table class="po-items">
@@ -1324,6 +1350,18 @@ function abrirFormOrcamento(id){
   document.getElementById('foFrete').value = o ? fmtMoeda(o.frete) : '0,00';
   document.getElementById('foDesconto').value = o ? fmtMoeda(o.desconto) : '0,00';
   document.getElementById('foObs').value = o ? o.obs : 'Produção iniciada após aprovação da arte.\nObrigado pela preferência!';
+  const condicoesFixas = ['À vista', '50% no pedido e 50% na entrega', '100% na entrega'];
+  const condSalva = o ? (o.condicaoPagamento || 'À vista') : 'À vista';
+  if(condicoesFixas.includes(condSalva)){
+    document.getElementById('foCondicaoPagamento').value = condSalva;
+    document.getElementById('foCondicaoOutro').value = '';
+  } else {
+    document.getElementById('foCondicaoPagamento').value = 'outro';
+    document.getElementById('foCondicaoOutro').value = condSalva;
+  }
+  alternarCondicaoOutro();
+  const formasSalvas = o ? (o.formasPagamento || []) : [];
+  document.querySelectorAll('.fo-forma-pag').forEach(chk => { chk.checked = formasSalvas.includes(chk.value); });
   document.getElementById('corpoItensOrc').innerHTML = '';
   if(o && o.itens.length){
     o.itens.forEach(it => adicionarItemOrc(it));
@@ -1337,6 +1375,11 @@ function abrirFormOrcamento(id){
 function fecharFormOrcamento(){
   document.getElementById('formOrcamentoWrap').classList.add('hidden');
   orcamentoEditId = null;
+}
+function alternarCondicaoOutro(){
+  const sel = document.getElementById('foCondicaoPagamento');
+  const outro = document.getElementById('foCondicaoOutro');
+  if(sel.value === 'outro'){ outro.classList.remove('hidden'); } else { outro.classList.add('hidden'); }
 }
 function opcoesProdutosHtml(selecionadoId){
   let html = '<option value="">Outro (digitar manualmente)</option>';
@@ -1411,6 +1454,16 @@ function salvarOrcamento(){
   })).filter(it => it.descricao);
   if(itens.length === 0){ alert('Preencha a descrição de pelo menos um item.'); return; }
 
+  const condSel = document.getElementById('foCondicaoPagamento').value;
+  let condicaoPagamento;
+  if(condSel === 'outro'){
+    condicaoPagamento = document.getElementById('foCondicaoOutro').value.trim();
+    if(!condicaoPagamento){ alert('Digite a condição de pagamento combinada.'); return; }
+  } else {
+    condicaoPagamento = condSel;
+  }
+  const formasPagamento = Array.from(document.querySelectorAll('.fo-forma-pag:checked')).map(c => c.value);
+
   const total = atualizarTotalOrc();
   const dados = {
     clienteId,
@@ -1421,6 +1474,8 @@ function salvarOrcamento(){
     frete: parseMoeda(document.getElementById('foFrete').value),
     desconto: parseMoeda(document.getElementById('foDesconto').value),
     obs: document.getElementById('foObs').value,
+    condicaoPagamento,
+    formasPagamento,
     total
   };
 
@@ -1506,6 +1561,8 @@ function imprimirOrcamento(id){
   document.getElementById('poTelefone').textContent = c.telefone || '';
   document.getElementById('poEmail').textContent = c.email || '';
   document.getElementById('poCidade').textContent = c.cidade || state.empresa.cidadePadrao || '';
+  document.getElementById('poFormaPagamento').textContent = (o.formasPagamento && o.formasPagamento.length) ? o.formasPagamento.join(', ') : '—';
+  document.getElementById('poCondicaoPagamento').textContent = o.condicaoPagamento || '—';
 
   const corpo = document.getElementById('poItensBody');
   corpo.innerHTML = '';

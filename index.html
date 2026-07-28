@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <title>Painel Formato 3D</title>
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('formato3d_tema');
+    if(t === 'dark'){ document.documentElement.setAttribute('data-theme', 'dark'); }
+  }catch(e){}
+})();
+</script>
 <style>
   :root{
     --navy:#2a2a72;
@@ -20,19 +28,59 @@
     --amber:#9a6b00;
     --amber-bg:#fff4dc;
     --gray:#666;
+    --text:#181818;
+    --label:#333333;
+    --surface-hover:#f1f2fb;
+    --surface-2:#fafbff;
+    --row-hover:#f7f8fd;
+    --badge-neutral-bg:#e4e6f7;
+    --th-soft:#eceefb;
+    --info-border:#c7d6f5;
+    --info-text:#1c2a55;
+    --placeholder-bg:#eef0fa;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"]{
+    --navy:#7c74ff;
+    --navy-dark:#5a52d9;
+    --box-bg:#242244;
+    --total-bg:#2b2755;
+    --border:#7c74ff;
+    --line:#33334f;
+    --bg:#131120;
+    --card:#1e1c30;
+    --green:#4ade80;
+    --green-bg:rgba(74,222,128,0.16);
+    --red:#ff6b6b;
+    --red-bg:rgba(255,107,107,0.16);
+    --amber:#facc15;
+    --amber-bg:rgba(250,204,21,0.16);
+    --gray:#9b98b8;
+    --text:#ecebfa;
+    --label:#c7c4e6;
+    --surface-hover:#2a2844;
+    --surface-2:#221f3a;
+    --row-hover:#26233d;
+    --badge-neutral-bg:#33305a;
+    --th-soft:#262244;
+    --info-border:#3d3a66;
+    --info-text:#d8d6ff;
+    --placeholder-bg:#2a2844;
+    color-scheme: dark;
   }
   *{ box-sizing:border-box; }
   body{
     font-family: Arial, Helvetica, sans-serif;
     background:var(--bg);
     margin:0;
-    color:#181818;
+    color:var(--text);
+    transition:background 0.15s ease, color 0.15s ease;
   }
   .hidden{ display:none !important; }
 
   /* ===== Top bar ===== */
   header.topbar{
-    background:#fff;
+    background:var(--card);
     border-bottom:2px solid var(--navy);
     display:flex;
     align-items:center;
@@ -59,12 +107,12 @@
     cursor:pointer;
     border-radius:6px 6px 0 0;
   }
-  nav.tabs button:hover{ background:#f1f2fb; }
+  nav.tabs button:hover{ background:var(--surface-hover); }
   nav.tabs button.active{ background:var(--navy); color:#fff; }
 
   .top-actions{ margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .top-actions button{
-    background:#fff;
+    background:var(--card);
     border:1px solid var(--navy);
     color:var(--navy);
     padding:8px 12px;
@@ -75,6 +123,7 @@
   }
   .top-actions button.primary{ background:var(--navy); color:#fff; }
   .top-actions button:hover{ opacity:0.88; }
+  #btnTema{ font-size:15px; padding:6px 10px; line-height:1; }
   #statusSalvo{ font-size:11.5px; color:var(--gray); white-space:nowrap; }
   #statusSalvo.dirty{ color:var(--red); font-weight:bold; }
   #statusSalvo.autosave{ color:var(--green); font-weight:bold; }
@@ -84,8 +133,8 @@
   main{ max-width:1180px; margin:0 auto; padding:20px 20px 60px 20px; }
   .banner{
     background:var(--box-bg);
-    border:1px solid #c7d6f5;
-    color:#1c2a55;
+    border:1px solid var(--info-border);
+    color:var(--info-text);
     padding:10px 14px;
     border-radius:8px;
     font-size:12.5px;
@@ -110,6 +159,8 @@
     border:1px solid var(--line);
     border-radius:6px;
     font-size:13px;
+    background:var(--card);
+    color:var(--text);
   }
   button.btn{
     background:var(--navy);
@@ -121,7 +172,7 @@
     font-weight:bold;
     cursor:pointer;
   }
-  button.btn.secondary{ background:#fff; color:var(--navy); border:1px solid var(--navy); }
+  button.btn.secondary{ background:var(--card); color:var(--navy); border:1px solid var(--navy); }
   button.btn.ghost{ background:none; color:var(--navy); border:1px dashed var(--navy); }
   button.btn:hover{ opacity:0.88; }
 
@@ -160,7 +211,7 @@
   .form-card h3{ margin:0 0 14px 0; font-size:15px; color:var(--navy); }
   .form-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:12px; }
   .form-grid.wide{ grid-template-columns:1fr; }
-  .field label{ display:block; font-size:12px; font-weight:bold; color:#333; margin-bottom:4px; }
+  .field label{ display:block; font-size:12px; font-weight:bold; color:var(--label); margin-bottom:4px; }
   .field input, .field select, .field textarea{
     width:100%;
     padding:9px 10px;
@@ -168,6 +219,8 @@
     border-radius:6px;
     font-size:13.5px;
     font-family:inherit;
+    background:var(--card);
+    color:var(--text);
   }
   .field textarea{ resize:vertical; min-height:56px; }
   .form-actions{ display:flex; gap:8px; margin-top:6px; }
@@ -180,7 +233,7 @@
     padding:16px;
     text-align:center;
     cursor:pointer;
-    background:#fafbff;
+    background:var(--surface-2);
     position:relative;
   }
   .photo-upload:hover{ border-color:var(--navy); }
@@ -210,7 +263,7 @@
 
   /* ===== Calculadora 3D ===== */
   .calc-wrap{ display:grid; grid-template-columns:1.3fr 1fr; gap:20px; align-items:start; }
-  .calc-note{ background:var(--box-bg); border:1px solid #c7d6f5; color:#1c2a55; font-size:11.5px; padding:8px 10px; border-radius:7px; margin-top:6px; line-height:1.5; }
+  .calc-note{ background:var(--box-bg); border:1px solid var(--info-border); color:var(--info-text); font-size:11.5px; padding:8px 10px; border-radius:7px; margin-top:6px; line-height:1.5; }
   .calc-result{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; position:sticky; top:80px; }
   .calc-result h3{ margin:0 0 12px 0; font-size:15px; color:var(--navy); }
   .calc-linha{ display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--line); gap:10px; }
@@ -235,9 +288,11 @@
     font-size:13px;
     vertical-align:middle;
   }
-  table.data tbody tr:hover{ background:#f7f8fd; }
+  table.data tbody tr:hover{ background:var(--row-hover); }
   table.data td.acoes{ white-space:nowrap; text-align:right; }
   table.data .empty-row td{ text-align:center; color:var(--gray); padding:22px; font-style:italic; }
+
+  .placeholder-thumb{ width:36px; height:36px; border-radius:6px; background:var(--placeholder-bg); }
 
   .btn-icon{
     background:none;
@@ -250,13 +305,13 @@
     color:var(--navy);
   }
   .btn-icon.danger{ color:var(--red); border-color:#f0c4bf; }
-  .btn-icon:hover{ background:#f1f2fb; }
+  .btn-icon:hover{ background:var(--surface-hover); }
 
   .badge{ display:inline-block; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:bold; }
   .badge.pendente{ background:var(--amber-bg); color:var(--amber); }
   .badge.aprovado{ background:var(--green-bg); color:var(--green); }
   .badge.recusado{ background:var(--red-bg); color:var(--red); }
-  .badge.concluido{ background:#e4e6f7; color:var(--navy); }
+  .badge.concluido{ background:var(--badge-neutral-bg); color:var(--navy); }
   .badge.pagar{ background:var(--red-bg); color:var(--red); }
   .badge.receber{ background:var(--green-bg); color:var(--green); }
   .badge.pago{ background:var(--green-bg); color:var(--green); }
@@ -266,9 +321,9 @@
 
   /* ===== Itens de orçamento ===== */
   table.itens-orc{ width:100%; border-collapse:collapse; margin-bottom:10px; }
-  table.itens-orc th{ background:#eceefb; color:var(--navy); text-align:left; padding:8px; font-size:12px; }
+  table.itens-orc th{ background:var(--th-soft); color:var(--navy); text-align:left; padding:8px; font-size:12px; }
   table.itens-orc td{ padding:6px; border-bottom:1px solid var(--line); }
-  table.itens-orc td input, table.itens-orc td select{ width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:5px; font-size:12.5px; }
+  table.itens-orc td input, table.itens-orc td select{ width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:5px; font-size:12.5px; background:var(--card); color:var(--text); }
   table.itens-orc td.total-item{ text-align:right; font-weight:bold; white-space:nowrap; padding-right:10px; }
   table.itens-orc td.qtd-col{ width:70px; }
   table.itens-orc td.valor-col{ width:110px; }
@@ -280,7 +335,7 @@
   .totais-orc td{ border:1px solid var(--line); padding:8px 12px; font-size:13px; }
   .totais-orc td.tlabel{ width:50%; }
   .totais-orc td.tval{ text-align:right; }
-  .totais-orc td.tval input{ width:80px; text-align:right; border:none; font-family:inherit; font-size:13px; }
+  .totais-orc td.tval input{ width:80px; text-align:right; border:none; font-family:inherit; font-size:13px; background:transparent; color:var(--text); }
   .totais-orc tr.grand td{ background:var(--total-bg); font-weight:bold; font-size:14px; }
 
   /* ===== Print area (orçamento) ===== */
@@ -367,6 +422,7 @@
   </nav>
   <div class="top-actions">
     <span id="statusSalvo">carregando...</span>
+    <button id="btnTema" onclick="alternarTema()" title="Alternar tema claro/escuro">🌙</button>
   </div>
 </header>
 
@@ -897,6 +953,31 @@ function proximoCodigoProduto(){
 }
 
 /* =========================================================
+   TEMA (claro / escuro)
+   ========================================================= */
+function aplicarTema(tema){
+  document.documentElement.setAttribute('data-theme', tema);
+  const btn = document.getElementById('btnTema');
+  if(btn){
+    btn.textContent = tema === 'dark' ? '☀️' : '🌙';
+    btn.title = tema === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro';
+  }
+  try{ localStorage.setItem('formato3d_tema', tema); }catch(e){}
+}
+function alternarTema(){
+  const atual = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  aplicarTema(atual === 'dark' ? 'light' : 'dark');
+}
+(function inicializarTema(){
+  const atual = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const btn = document.getElementById('btnTema');
+  if(btn){
+    btn.textContent = atual === 'dark' ? '☀️' : '🌙';
+    btn.title = atual === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro';
+  }
+})();
+
+/* =========================================================
    NAVEGAÇÃO
    ========================================================= */
 function mostrarAba(nome){
@@ -1145,7 +1226,7 @@ function renderProdutos(){
     const baixo = qtd !== null && qtd <= alerta;
     const foto = p.foto
       ? `<img src="${p.foto}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--line);">`
-      : `<div style="width:36px;height:36px;border-radius:6px;background:#eef0fa;"></div>`;
+      : `<div class="placeholder-thumb"></div>`;
     tr.innerHTML = `<td>${foto}</td><td>${esc(p.codigo)}</td><td>${esc(p.nome)}</td><td>${esc(p.categoria || '—')}</td>
       <td>R$ ${fmtMoeda(p.precoCusto)}</td><td>R$ ${fmtMoeda(p.preco)}</td>
       <td>${qtd === null ? '—' : `<span class="badge ${baixo ? 'estoque-baixo' : 'estoque-ok'}">${qtd}</span>`}</td>

@@ -288,22 +288,14 @@
     <button class="navtab" id="navtab-financeiro" onclick="mostrarAba('financeiro')">Financeiro</button>
   </nav>
   <div class="top-actions">
-    <span id="statusSalvo">dados não salvos ainda</span>
-    <span id="arquivoVinculadoLabel" class="linked-label"></span>
-    <button id="btnVincular" class="hidden secondary" onclick="abrirArquivoVinculado()" title="Abrir um backup existente e vincular para salvar automaticamente nele">🔗 Abrir arquivo</button>
-    <button id="btnNovoVinculado" class="hidden secondary" onclick="criarArquivoVinculado()" title="Criar um novo arquivo e vincular para salvar automaticamente nele">🆕 Vincular novo arquivo</button>
-    <button class="primary" onclick="salvarDados()">💾 Salvar dados</button>
-    <button onclick="document.getElementById('inputCarregar').click()">📂 Carregar dados</button>
-    <input type="file" id="inputCarregar" accept="application/json" class="hidden" onchange="carregarDados(this)">
+    <span id="statusSalvo">carregando...</span>
   </div>
 </header>
 
 <main>
 
   <div class="banner" id="bannerPersistencia">
-    <b>Como funciona a persistência:</b> por segurança, este painel não grava dados sozinho da primeira vez — tudo fica em memória enquanto a página está aberta.
-    A forma mais prática (Chrome ou Edge, arquivo aberto direto no seu computador): clique em <b>🆕 Vincular novo arquivo</b> uma vez (ou <b>🔗 Abrir arquivo</b> se já tiver um backup) — a partir daí o painel <b>salva sozinho</b> nesse arquivo a cada alteração, sem precisar clicar em nada.
-    Se preferir (ou se seu navegador não suportar isso), use <b>💾 Salvar dados</b> para baixar um .json e <b>📂 Carregar dados</b> para continuar de onde parou. Como o navegador esquece o vínculo ao fechar a aba, é só clicar em <b>🔗 Abrir arquivo</b> de novo apontando para o mesmo arquivo na próxima vez.
+    <b>Como funciona a persistência:</b> todos os dados deste painel ficam guardados numa Planilha Google vinculada a este aplicativo. Cada alteração é salva sozinha, na hora, sem precisar clicar em nada. Quiser ver os dados "crus"? Abra a planilha vinculada a este script a qualquer momento.
   </div>
 
   <!-- ============ DASHBOARD ============ -->
@@ -568,7 +560,19 @@ Obrigado pela preferência!</textarea></div>
 <script>
 /* =========================================================
    ESTADO / PERSISTÊNCIA
+   (interface hospedada no GitHub Pages, dados na Planilha Google
+   via uma API feita em Google Apps Script — veja CONFIG abaixo)
    ========================================================= */
+
+// A URL da API pode vir por parâmetro na própria URL do site (?api=...&token=...),
+// pra não precisar editar este arquivo depois de publicar o Apps Script.
+// Se não vier por parâmetro, usa os valores fixos abaixo como padrão.
+const _params = new URLSearchParams(window.location.search);
+const CONFIG = {
+  URL_API: _params.get('api') || 'https://script.google.com/macros/s/AKfycby097cQ9T6xSvAPap39NJMl3dKK4qOElg5LFfZpQyKY1oQrWKqf29h1LkADBK9HzELS/exec',
+  TOKEN: _params.get('token') || 'KFK-61rlTHp5hqH5UviaP6ujLmUbZWLh'
+};
+
 function estadoPadrao(){
   return {
     empresa:{ nome:'FORMATO 3D', subtitulo:'Impressão e Personalizados', cnpj:'67.905.742/0001-37', whatsapp:'(92) 98632-6919', cidadePadrao:'Manaus/AM' },
@@ -582,7 +586,7 @@ function estadoPadrao(){
 }
 let state = estadoPadrao();
 let dirty = false;
-let arquivoHandle = null;
+let carregando = true;
 let autoSaveTimer = null;
 
 function uid(tipo){
@@ -591,151 +595,67 @@ function uid(tipo){
   return tipo.slice(0,3) + '_' + n;
 }
 
-function suportaFS(){
-  return (typeof window.showOpenFilePicker === 'function') && (typeof window.showSaveFilePicker === 'function');
-}
-
 function marcarAlterado(){
+  if(carregando) return;
   dirty = true;
   const el = document.getElementById('statusSalvo');
-  if(arquivoHandle){
-    el.textContent = 'salvando no arquivo vinculado...';
-    el.classList.remove('autosave');
-    el.classList.add('dirty');
-    clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(autoSalvarNoArquivo, 900);
-  } else {
-    el.textContent = 'você tem alterações não salvas';
-    el.classList.add('dirty');
-  }
+  el.textContent = 'salvando na planilha...';
+  el.classList.add('dirty');
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(salvarNoServidor, 800);
 }
 
-function marcarSalvo(auto){
+function marcarSalvo(){
   dirty = false;
   const el = document.getElementById('statusSalvo');
   const agora = new Date();
-  const hora = String(agora.getHours()).padStart(2,'0') + ':' + String(agora.getMinutes()).padStart(2,'0');
-  el.textContent = (auto ? 'salvo automaticamente às ' : 'salvo às ') + hora;
+  el.textContent = 'salvo às ' + String(agora.getHours()).padStart(2,'0') + ':' + String(agora.getMinutes()).padStart(2,'0');
   el.classList.remove('dirty');
-  el.classList.toggle('autosave', !!auto);
 }
 
-function atualizarRotuloArquivoVinculado(){
-  const el = document.getElementById('arquivoVinculadoLabel');
-  el.textContent = arquivoHandle ? ('🔗 ' + arquivoHandle.name) : '';
+function configuracaoPendente(){
+  return !CONFIG.URL_API || CONFIG.URL_API.indexOf('COLE_AQUI') !== -1;
 }
 
-async function escreverNoArquivoVinculado(){
-  const writable = await arquivoHandle.createWritable();
-  await writable.write(JSON.stringify(state, null, 2));
-  await writable.close();
-}
-
-async function autoSalvarNoArquivo(){
-  if(!arquivoHandle) return;
-  try{
-    await escreverNoArquivoVinculado();
-    marcarSalvo(true);
-  }catch(err){
-    document.getElementById('statusSalvo').textContent = 'não foi possível salvar automaticamente — clique em Salvar dados';
-  }
-}
-
-async function abrirArquivoVinculado(){
-  if(!suportaFS()){
-    alert('Esse recurso funciona no Chrome ou Edge, com o arquivo aberto diretamente no seu computador. Use "Salvar dados" e "Carregar dados" normalmente.');
-    return;
-  }
-  try{
-    const [handle] = await window.showOpenFilePicker({
-      types:[{ description:'Backup do painel Formato 3D', accept:{'application/json':['.json']} }],
-      multiple:false
+function salvarNoServidor(){
+  if(configuracaoPendente()) return;
+  fetch(CONFIG.URL_API, {
+    method: 'POST',
+    body: JSON.stringify({ token: CONFIG.TOKEN, state: JSON.parse(JSON.stringify(state)) })
+  })
+    .then(r => r.json())
+    .then(resp => {
+      if(resp.erro) throw new Error(resp.erro);
+      marcarSalvo();
+    })
+    .catch(err => {
+      const el = document.getElementById('statusSalvo');
+      el.textContent = 'não foi possível salvar agora — verifique sua internet';
+      el.classList.add('dirty');
+      console.error(err);
     });
-    const file = await handle.getFile();
-    const texto = await file.text();
-    const novo = JSON.parse(texto);
-    if(!novo || typeof novo !== 'object'){ throw new Error('formato inválido'); }
-    state = Object.assign(estadoPadrao(), novo);
-    arquivoHandle = handle;
-    atualizarRotuloArquivoVinculado();
+}
+
+function carregarDoServidor(){
+  if(configuracaoPendente()){
+    document.getElementById('statusSalvo').textContent = 'painel não configurado — veja o guia de instalação';
+    carregando = false;
     renderTudo();
-    marcarSalvo(true);
-    alert('Arquivo vinculado! A partir de agora o painel salva sozinho neste arquivo a cada alteração.');
-  }catch(err){
-    if(err.name !== 'AbortError'){
-      alert('Não foi possível abrir esse arquivo. Ele precisa ser um backup .json válido gerado por este painel.');
-    }
-  }
-}
-
-async function criarArquivoVinculado(){
-  if(!suportaFS()){
-    alert('Esse recurso funciona no Chrome ou Edge, com o arquivo aberto diretamente no seu computador. Use "Salvar dados" e "Carregar dados" normalmente.');
     return;
   }
-  try{
-    const handle = await window.showSaveFilePicker({
-      suggestedName:'formato3d_dados.json',
-      types:[{ description:'Backup do painel Formato 3D', accept:{'application/json':['.json']} }]
-    });
-    arquivoHandle = handle;
-    await escreverNoArquivoVinculado();
-    atualizarRotuloArquivoVinculado();
-    marcarSalvo(true);
-    alert('Arquivo criado e vinculado! A partir de agora o painel salva sozinho neste arquivo a cada alteração.');
-  }catch(err){
-    if(err.name !== 'AbortError'){
-      alert('Não foi possível criar o arquivo.');
-    }
-  }
-}
-
-async function salvarDados(){
-  if(arquivoHandle){
-    try{
-      await escreverNoArquivoVinculado();
-      marcarSalvo(true);
-      return;
-    }catch(err){
-      alert('Não foi possível salvar no arquivo vinculado (a permissão pode ter expirado). Vou baixar uma cópia agora — clique em "🔗 Abrir arquivo" para vincular de novo, se quiser.');
-      arquivoHandle = null;
-      atualizarRotuloArquivoVinculado();
-    }
-  }
-  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const hoje = new Date();
-  const stamp = hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0') + '-' + String(hoje.getDate()).padStart(2,'0');
-  a.href = url;
-  a.download = 'formato3d_dados_' + stamp + '.json';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  marcarSalvo();
-}
-
-function carregarDados(input){
-  const file = input.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e){
-    try{
-      const novo = JSON.parse(e.target.result);
-      if(!novo || typeof novo !== 'object'){ throw new Error('formato inválido'); }
-      state = Object.assign(estadoPadrao(), novo);
-      arquivoHandle = null;
-      atualizarRotuloArquivoVinculado();
+  fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN))
+    .then(r => r.json())
+    .then(dados => {
+      if(dados.erro) throw new Error(dados.erro);
+      state = Object.assign(estadoPadrao(), dados);
+      carregando = false;
       renderTudo();
       marcarSalvo();
-      alert('Dados carregados com sucesso!');
-    }catch(err){
-      alert('Não foi possível ler este arquivo. Verifique se é um backup válido gerado por este painel.');
-    }
-  };
-  reader.readAsText(file);
-  input.value = '';
+    })
+    .catch(err => {
+      document.getElementById('statusSalvo').textContent = 'erro ao carregar os dados — recarregue a página';
+      console.error(err);
+    });
 }
 
 window.addEventListener('beforeunload', function(e){
@@ -1350,15 +1270,7 @@ function renderDashboard(){
 /* =========================================================
    INICIALIZAÇÃO
    ========================================================= */
-if(suportaFS()){
-  document.getElementById('btnVincular').classList.remove('hidden');
-  document.getElementById('btnNovoVinculado').classList.remove('hidden');
-} else {
-  document.getElementById('bannerPersistencia').innerHTML =
-    '<b>Como funciona a persistência:</b> por segurança, este painel não grava dados sozinho — tudo fica em memória enquanto a página está aberta. ' +
-    'Clique em <b>💾 Salvar dados</b> para baixar um arquivo de backup (.json) sempre que terminar de mexer, e em <b>📂 Carregar dados</b> para continuar de onde parou na próxima vez que abrir o painel.';
-}
-renderTudo();
+carregarDoServidor();
 </script>
 
 </body>

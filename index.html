@@ -171,6 +171,54 @@
   }
   .field textarea{ resize:vertical; min-height:56px; }
   .form-actions{ display:flex; gap:8px; margin-top:6px; }
+  .form-row-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+
+  /* ===== Upload de foto ===== */
+  .photo-upload{
+    border:2px dashed var(--line);
+    border-radius:10px;
+    padding:16px;
+    text-align:center;
+    cursor:pointer;
+    background:#fafbff;
+    position:relative;
+  }
+  .photo-upload:hover{ border-color:var(--navy); }
+  .photo-upload input[type="file"]{ position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+  .photo-upload .ph-txt{ font-size:12.5px; color:var(--gray); }
+  .photo-upload .ph-txt b{ color:var(--navy); }
+  .photo-preview{ display:flex; align-items:center; gap:12px; margin-top:10px; }
+  .photo-preview img{ width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
+  .photo-preview button{ background:none; border:1px solid var(--red); color:var(--red); border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
+
+  /* ===== Modal ===== */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(20,20,35,0.55);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:30px 14px; overflow-y:auto; z-index:100;
+  }
+  .modal-card{
+    background:var(--card); border-radius:12px; padding:22px;
+    width:100%; max-width:640px; box-shadow:0 12px 40px rgba(0,0,0,0.3);
+  }
+  .modal-card h3{ margin:0 0 4px 0; font-size:17px; color:var(--navy); }
+  .modal-sub{ font-size:12.5px; color:var(--gray); margin:0 0 16px 0; line-height:1.5; }
+
+  /* ===== Estoque ===== */
+  .badge.estoque-baixo{ background:var(--red-bg); color:var(--red); }
+  .badge.estoque-ok{ background:var(--green-bg); color:var(--green); }
+
+  /* ===== Calculadora 3D ===== */
+  .calc-wrap{ display:grid; grid-template-columns:1.3fr 1fr; gap:20px; align-items:start; }
+  .calc-note{ background:var(--box-bg); border:1px solid #c7d6f5; color:#1c2a55; font-size:11.5px; padding:8px 10px; border-radius:7px; margin-top:6px; line-height:1.5; }
+  .calc-result{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; position:sticky; top:80px; }
+  .calc-result h3{ margin:0 0 12px 0; font-size:15px; color:var(--navy); }
+  .calc-linha{ display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--line); gap:10px; }
+  .calc-linha span:first-child{ color:var(--gray); }
+  .calc-linha span:last-child{ font-weight:bold; white-space:nowrap; }
+  .calc-linha.destaque{ background:var(--total-bg); margin:0 -18px; padding:10px 18px; border:none; }
+  .calc-linha.total{ font-size:17px; color:var(--navy); border-bottom:none; padding-top:12px; }
+  .calc-linha.total span:last-child{ font-weight:bold; color:var(--navy); }
 
   /* ===== Tables ===== */
   table.data{ width:100%; border-collapse:collapse; background:var(--card); border-radius:10px; overflow:hidden; }
@@ -270,6 +318,35 @@
     @page{ margin:14mm; }
   }
 
+  /* ===== Responsivo (celular / tablet) ===== */
+  @media (max-width:760px){
+    header.topbar{ padding:8px 12px; gap:8px 10px; }
+    header.topbar img{ height:30px; }
+    .brand{ margin-right:0; }
+    .brand-text{ font-size:13px; }
+    .brand-text small{ font-size:10px; }
+    nav.tabs{ order:3; width:100%; overflow-x:auto; flex-wrap:nowrap; padding-bottom:2px; -webkit-overflow-scrolling:touch; }
+    nav.tabs button{ padding:8px 10px; font-size:12px; white-space:nowrap; }
+    .top-actions{ order:2; margin-left:0; width:100%; justify-content:space-between; }
+    main{ padding:14px 12px 50px 12px; }
+    h2.section-title{ font-size:16.5px; }
+    .cards-grid{ grid-template-columns:repeat(2,1fr); gap:10px; }
+    .card{ padding:12px; }
+    .card .value{ font-size:19px; }
+    .form-grid, .form-row-2{ grid-template-columns:1fr; }
+    .panel-header{ flex-direction:column; align-items:stretch; }
+    .panel-actions{ width:100%; }
+    .panel-actions input[type="text"], .panel-actions input[type="search"], .panel-actions select{ flex:1; min-width:0; }
+    table.data, table.itens-orc, table.po-items, table.po-client, table.po-totals{ display:block; overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch; }
+    .modal-overlay{ padding:14px 8px; }
+    .modal-card{ padding:16px; max-width:100%; }
+    .calc-wrap{ grid-template-columns:1fr; }
+    .calc-result{ position:static; }
+  }
+  @media (max-width:420px){
+    .cards-grid{ grid-template-columns:1fr; }
+  }
+
   footer.rodape{ text-align:center; color:var(--gray); font-size:11.5px; padding:20px 0 10px 0; }
 </style>
 </head>
@@ -284,6 +361,7 @@
     <button class="navtab active" id="navtab-dashboard" onclick="mostrarAba('dashboard')">Início</button>
     <button class="navtab" id="navtab-clientes" onclick="mostrarAba('clientes')">Clientes</button>
     <button class="navtab" id="navtab-produtos" onclick="mostrarAba('produtos')">Produtos</button>
+    <button class="navtab" id="navtab-calc3d" onclick="mostrarAba('calc3d')">🧮 Calculadora 3D</button>
     <button class="navtab" id="navtab-orcamentos" onclick="mostrarAba('orcamentos')">Orçamentos</button>
     <button class="navtab" id="navtab-financeiro" onclick="mostrarAba('financeiro')">Financeiro</button>
   </nav>
@@ -362,27 +440,152 @@
       </div>
     </div>
 
-    <div id="formProdutoWrap" class="form-card hidden">
-      <h3 id="formProdutoTitulo">Novo produto</h3>
-      <div class="form-grid">
-        <div class="field"><label>Código</label><input id="fpCodigo"></div>
-        <div class="field"><label>Nome *</label><input id="fpNome"></div>
-        <div class="field"><label>Preço unitário (R$) *</label><input id="fpPreco" placeholder="0,00"></div>
-        <div class="field"><label>Unidade</label><input id="fpUnidade" placeholder="un, m², hora..."></div>
-      </div>
-      <div class="form-grid wide">
-        <div class="field"><label>Descrição</label><textarea id="fpDescricao"></textarea></div>
-      </div>
-      <div class="form-actions">
-        <button class="btn" onclick="salvarProduto()">Salvar produto</button>
-        <button class="btn secondary" onclick="fecharFormProduto()">Cancelar</button>
+    <div id="formProdutoWrap" class="modal-overlay hidden" onclick="if(event.target===this) fecharFormProduto()">
+      <div class="modal-card">
+        <h3 id="formProdutoTitulo">Novo produto no estoque</h3>
+        <p class="modal-sub">Preencha os dados do produto para adicioná-lo ao seu catálogo.</p>
+
+        <div class="form-grid wide">
+          <div class="field"><label>Nome do produto *</label><input id="fpNome" placeholder="Ex: Chaveiro personalizado"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Categoria</label>
+            <select id="fpCategoria">
+              <option value="">Selecionar categoria</option>
+              <option>Chaveiros</option>
+              <option>Decoração</option>
+              <option>Utilidades domésticas</option>
+              <option>Brinquedos</option>
+              <option>Personalizados</option>
+              <option>Peças técnicas</option>
+              <option>Miniaturas</option>
+              <option>Outros</option>
+            </select>
+          </div>
+          <div class="field"><label>Código</label><input id="fpCodigo"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Preço de custo (R$)</label><input id="fpPrecoCusto" placeholder="0,00"></div>
+          <div class="field"><label>Preço de venda (R$) *</label><input id="fpPreco" placeholder="0,00"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Quantidade inicial</label><input id="fpQuantidade" type="number" min="0" step="1" placeholder="0"></div>
+          <div class="field"><label>Alerta de estoque baixo</label><input id="fpAlertaEstoque" type="number" min="0" step="1" placeholder="5"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Unidade</label><input id="fpUnidade" placeholder="un, m², hora..."></div>
+          <div class="field"><label>Peso da peça (g)</label><input id="fpPeso" type="number" min="0" step="0.1" placeholder="Opcional"></div>
+        </div>
+        <div class="form-grid wide">
+          <div class="field">
+            <label>Foto do produto</label>
+            <div class="photo-upload" id="fpFotoUpload">
+              <input type="file" id="fpFoto" accept="image/png,image/jpeg,image/webp" onchange="processarFotoProduto(this)">
+              <div class="ph-txt"><b>Adicionar foto</b><br>JPG, PNG ou WEBP até 5MB</div>
+            </div>
+            <div class="photo-preview hidden" id="fpFotoPreviewWrap">
+              <img id="fpFotoPreview" src="">
+              <button type="button" onclick="removerFotoProduto()">Remover foto</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-grid wide">
+          <div class="field"><label>Descrição</label><textarea id="fpDescricao"></textarea></div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn secondary" onclick="fecharFormProduto()">Cancelar</button>
+          <button class="btn" id="fpBtnSalvarProduto" onclick="salvarProduto()">Criar produto</button>
+        </div>
       </div>
     </div>
 
     <table class="data">
-      <thead><tr><th>Código</th><th>Nome</th><th>Preço unit.</th><th>Unidade</th><th></th></tr></thead>
+      <thead><tr><th>Foto</th><th>Código</th><th>Nome</th><th>Categoria</th><th>Preço custo</th><th>Preço venda</th><th>Estoque</th><th></th></tr></thead>
       <tbody id="corpoTabelaProdutos"></tbody>
     </table>
+  </section>
+
+  <!-- ============ CALCULADORA 3D ============ -->
+  <section id="tab-calc3d" class="tab-section hidden">
+    <div class="panel-header">
+      <h2 class="section-title">🧮 Calculadora 3D</h2>
+    </div>
+    <p class="modal-sub" style="margin-top:-8px;">Calcule o custo real da sua peça 3D incluindo filamento, energia, embalagem, desgaste da impressora, comissão e lucro.</p>
+
+    <div class="calc-wrap">
+      <div class="box">
+        <h3>Dados da peça</h3>
+        <div class="form-row-2">
+          <div class="field"><label>Nome da peça</label><input id="calcNome" placeholder="Ex: Vaso decorativo" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Qtd</label><input id="calcQtd" type="number" min="1" step="1" value="1" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Peso da peça</label>
+            <div style="display:flex; gap:6px;">
+              <input id="calcPeso" type="number" min="0" step="0.1" placeholder="0" oninput="calcularOrcamento3D()" style="flex:1;">
+              <select id="calcPesoUnidade" onchange="calcularOrcamento3D()" style="width:100px;">
+                <option value="g">gramas</option>
+                <option value="kg">quilos</option>
+              </select>
+            </div>
+          </div>
+          <div class="field"><label>Preço do filamento (por kg)</label><input id="calcPrecoFilamento" placeholder="R$ 0,00" value="120,00" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Tempo de impressão</label>
+            <div style="display:flex; gap:6px;">
+              <input id="calcHoras" type="number" min="0" step="1" placeholder="horas" value="0" oninput="calcularOrcamento3D()">
+              <input id="calcMinutos" type="number" min="0" max="59" step="1" placeholder="min" value="0" oninput="calcularOrcamento3D()">
+            </div>
+          </div>
+          <div class="field"><label>Custo da energia (kWh)</label><input id="calcPrecoKwh" placeholder="R$ 0,00" value="0,90" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Custo de embalagem</label><input id="calcEmbalagem" placeholder="R$ 0,00" value="2,00" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Desgaste por hora</label><input id="calcDesgaste" placeholder="R$ 0,00" value="1,50" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Margem de lucro (%)</label><input id="calcMargem" type="number" min="0" step="1" value="100" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Comissão do ponto (%)</label><input id="calcComissao" type="number" min="0" max="95" step="1" value="0" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Modelo da impressora</label>
+            <select id="calcModeloImpressora" onchange="aplicarModeloImpressora()">
+              <option value="">Selecionar modelo</option>
+              <option value="150">Creality Ender 3 / V2 / V3</option>
+              <option value="180">Creality Ender 5</option>
+              <option value="200">Creality CR-10</option>
+              <option value="120">Prusa i3 MK3S+</option>
+              <option value="150">Anycubic Kobra</option>
+              <option value="180">Anycubic i3 Mega</option>
+              <option value="150">Elegoo Neptune 3</option>
+              <option value="110">Bambu Lab P1P</option>
+              <option value="150">Bambu Lab X1 Carbon</option>
+              <option value="outro">Outro / não sei</option>
+            </select>
+          </div>
+          <div class="field"><label>Consumo da impressora (W)</label><input id="calcConsumo" type="number" min="0" step="1" value="150" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="calc-note">⚠ Valores médios de consumo. Ajuste conforme sua realidade.</div>
+      </div>
+
+      <div class="calc-result">
+        <h3>Resultado</h3>
+        <div class="calc-linha"><span>Custo do filamento</span><span id="calcOutFilamento">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Custo de energia</span><span id="calcOutEnergia">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Embalagem</span><span id="calcOutEmbalagem">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Desgaste da impressora</span><span id="calcOutDesgaste">R$ 0,00</span></div>
+        <div class="calc-linha destaque"><span>Custo total por peça</span><span id="calcOutCustoTotal">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Margem de lucro</span><span id="calcOutMargem">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Comissão do ponto</span><span id="calcOutComissao">R$ 0,00</span></div>
+        <div class="calc-linha total"><span>Preço de venda sugerido</span><span id="calcOutPrecoVenda">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Total do lote (<span id="calcOutQtdLabel">1</span> peça(s))</span><span id="calcOutTotalLote">R$ 0,00</span></div>
+        <div class="form-actions" style="margin-top:14px;">
+          <button class="btn" onclick="usarPrecoNoProduto()">Usar como novo produto</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ ORÇAMENTOS ============ -->
@@ -710,6 +913,7 @@ function mostrarAba(nome){
   document.querySelectorAll('.navtab').forEach(b => b.classList.remove('active'));
   document.getElementById('navtab-' + nome).classList.add('active');
   if(nome === 'dashboard') renderDashboard();
+  if(nome === 'calc3d') calcularOrcamento3D();
 }
 
 function renderTudo(){
@@ -811,16 +1015,33 @@ function atualizarSelectsClientes(){
    PRODUTOS
    ========================================================= */
 let produtoEditId = null;
+let fpFotoDataUrl = null;
 
 function abrirFormProduto(id){
   produtoEditId = id || null;
   const p = id ? state.produtos.find(x => x.id === id) : {};
   document.getElementById('fpCodigo').value = id ? (p.codigo || '') : proximoCodigoProduto();
   document.getElementById('fpNome').value = p.nome || '';
+  document.getElementById('fpCategoria').value = p.categoria || '';
+  document.getElementById('fpPrecoCusto').value = p.precoCusto !== undefined ? fmtMoeda(p.precoCusto) : '';
   document.getElementById('fpPreco').value = p.preco !== undefined ? fmtMoeda(p.preco) : '0,00';
+  document.getElementById('fpQuantidade').value = p.quantidade !== undefined ? p.quantidade : '';
+  document.getElementById('fpAlertaEstoque').value = p.alertaEstoqueBaixo !== undefined ? p.alertaEstoqueBaixo : 5;
   document.getElementById('fpUnidade').value = p.unidade || 'un';
+  document.getElementById('fpPeso').value = p.peso !== undefined && p.peso !== '' ? p.peso : '';
   document.getElementById('fpDescricao').value = p.descricao || '';
-  document.getElementById('formProdutoTitulo').textContent = id ? 'Editar produto' : 'Novo produto';
+  document.getElementById('fpFoto').value = '';
+  fpFotoDataUrl = p.foto || null;
+  if(fpFotoDataUrl){
+    document.getElementById('fpFotoPreview').src = fpFotoDataUrl;
+    document.getElementById('fpFotoPreviewWrap').classList.remove('hidden');
+    document.getElementById('fpFotoUpload').classList.add('hidden');
+  } else {
+    document.getElementById('fpFotoPreviewWrap').classList.add('hidden');
+    document.getElementById('fpFotoUpload').classList.remove('hidden');
+  }
+  document.getElementById('formProdutoTitulo').textContent = id ? 'Editar produto' : 'Novo produto no estoque';
+  document.getElementById('fpBtnSalvarProduto').textContent = id ? 'Salvar alterações' : 'Criar produto';
   document.getElementById('formProdutoWrap').classList.remove('hidden');
   document.getElementById('fpNome').focus();
 }
@@ -828,14 +1049,74 @@ function fecharFormProduto(){
   document.getElementById('formProdutoWrap').classList.add('hidden');
   produtoEditId = null;
 }
+function processarFotoProduto(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(!/^image\/(png|jpeg|webp)$/.test(file.type)){
+    alert('Envie uma imagem em JPG, PNG ou WEBP.');
+    input.value = '';
+    return;
+  }
+  if(file.size > 5 * 1024 * 1024){
+    alert('A imagem deve ter até 5MB.');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      comprimirImagemProduto(img, function(dataUrl){
+        fpFotoDataUrl = dataUrl;
+        document.getElementById('fpFotoPreview').src = dataUrl;
+        document.getElementById('fpFotoPreviewWrap').classList.remove('hidden');
+        document.getElementById('fpFotoUpload').classList.add('hidden');
+      });
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function comprimirImagemProduto(img, callback){
+  const w = img.width, h = img.height;
+  function gerar(maxDim, quality){
+    let ww = w, hh = h;
+    if(ww > hh && ww > maxDim){ hh = Math.round(hh * maxDim / ww); ww = maxDim; }
+    else if(hh > maxDim){ ww = Math.round(ww * maxDim / hh); hh = maxDim; }
+    const canvas = document.createElement('canvas');
+    canvas.width = ww; canvas.height = hh;
+    canvas.getContext('2d').drawImage(img, 0, 0, ww, hh);
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+  let maxDim = 480, quality = 0.75, tentativas = 0;
+  let dataUrl = gerar(maxDim, quality);
+  while(dataUrl.length > 45000 && tentativas < 8){
+    if(quality > 0.35){ quality -= 0.1; } else { maxDim = Math.round(maxDim * 0.8); }
+    dataUrl = gerar(maxDim, quality);
+    tentativas++;
+  }
+  callback(dataUrl);
+}
+function removerFotoProduto(){
+  fpFotoDataUrl = null;
+  document.getElementById('fpFoto').value = '';
+  document.getElementById('fpFotoPreviewWrap').classList.add('hidden');
+  document.getElementById('fpFotoUpload').classList.remove('hidden');
+}
 function salvarProduto(){
   const nome = document.getElementById('fpNome').value.trim();
-  if(!nome){ alert('Informe o nome do produto/serviço.'); return; }
+  if(!nome){ alert('Informe o nome do produto.'); return; }
   const dados = {
     codigo: document.getElementById('fpCodigo').value.trim() || proximoCodigoProduto(),
     nome,
+    categoria: document.getElementById('fpCategoria').value,
+    precoCusto: parseMoeda(document.getElementById('fpPrecoCusto').value),
     preco: parseMoeda(document.getElementById('fpPreco').value),
+    quantidade: parseInt(document.getElementById('fpQuantidade').value, 10) || 0,
+    alertaEstoqueBaixo: parseInt(document.getElementById('fpAlertaEstoque').value, 10) || 5,
     unidade: document.getElementById('fpUnidade').value.trim() || 'un',
+    peso: parseFloat(document.getElementById('fpPeso').value) || 0,
+    foto: fpFotoDataUrl || '',
     descricao: document.getElementById('fpDescricao').value.trim()
   };
   if(produtoEditId){
@@ -859,14 +1140,23 @@ function renderProdutos(){
   const tbody = document.getElementById('corpoTabelaProdutos');
   tbody.innerHTML = '';
   const lista = state.produtos.filter(p =>
-    !busca || p.nome.toLowerCase().includes(busca) || (p.codigo||'').toLowerCase().includes(busca)
+    !busca || p.nome.toLowerCase().includes(busca) || (p.codigo||'').toLowerCase().includes(busca) || (p.categoria||'').toLowerCase().includes(busca)
   );
   if(lista.length === 0){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhum produto cadastrado ainda.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Nenhum produto cadastrado ainda.</td></tr>';
   }
   lista.forEach(p => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${esc(p.codigo)}</td><td>${esc(p.nome)}</td><td>R$ ${fmtMoeda(p.preco)}</td><td>${esc(p.unidade)}</td>
+    const temEstoque = p.quantidade !== undefined && p.quantidade !== '';
+    const qtd = temEstoque ? Number(p.quantidade) : null;
+    const alerta = p.alertaEstoqueBaixo !== undefined && p.alertaEstoqueBaixo !== '' ? Number(p.alertaEstoqueBaixo) : 5;
+    const baixo = qtd !== null && qtd <= alerta;
+    const foto = p.foto
+      ? `<img src="${p.foto}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--line);">`
+      : `<div style="width:36px;height:36px;border-radius:6px;background:#eef0fa;"></div>`;
+    tr.innerHTML = `<td>${foto}</td><td>${esc(p.codigo)}</td><td>${esc(p.nome)}</td><td>${esc(p.categoria || '—')}</td>
+      <td>R$ ${fmtMoeda(p.precoCusto)}</td><td>R$ ${fmtMoeda(p.preco)}</td>
+      <td>${qtd === null ? '—' : `<span class="badge ${baixo ? 'estoque-baixo' : 'estoque-ok'}">${qtd}</span>`}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="abrirFormProduto('${p.id}')" title="Editar">✎</button>
         <button class="btn-icon danger" onclick="excluirProduto('${p.id}')" title="Excluir">✕</button>
@@ -874,6 +1164,70 @@ function renderProdutos(){
     tbody.appendChild(tr);
   });
   document.getElementById('contagemProdutos').textContent = state.produtos.length;
+}
+
+/* =========================================================
+   CALCULADORA 3D
+   ========================================================= */
+function aplicarModeloImpressora(){
+  const sel = document.getElementById('calcModeloImpressora');
+  const v = sel.value;
+  if(v && v !== 'outro'){
+    document.getElementById('calcConsumo').value = v;
+  }
+  calcularOrcamento3D();
+}
+function calcularOrcamento3D(){
+  const elQtd = document.getElementById('calcQtd');
+  if(!elQtd) return;
+  const qtd = Math.max(1, parseInt(elQtd.value, 10) || 1);
+  const peso = parseFloat(document.getElementById('calcPeso').value) || 0;
+  const unidadePeso = document.getElementById('calcPesoUnidade').value;
+  const pesoKg = unidadePeso === 'kg' ? peso : peso / 1000;
+  const precoFilamentoKg = parseMoeda(document.getElementById('calcPrecoFilamento').value);
+  const horas = parseFloat(document.getElementById('calcHoras').value) || 0;
+  const minutos = parseFloat(document.getElementById('calcMinutos').value) || 0;
+  const horasTotais = horas + (minutos / 60);
+  const precoKwh = parseMoeda(document.getElementById('calcPrecoKwh').value);
+  const embalagem = parseMoeda(document.getElementById('calcEmbalagem').value);
+  const desgasteHora = parseMoeda(document.getElementById('calcDesgaste').value);
+  const margem = parseFloat(document.getElementById('calcMargem').value) || 0;
+  const comissao = Math.min(95, parseFloat(document.getElementById('calcComissao').value) || 0);
+  const consumoW = parseFloat(document.getElementById('calcConsumo').value) || 0;
+
+  const custoFilamento = pesoKg * precoFilamentoKg;
+  const kWhConsumido = (consumoW / 1000) * horasTotais;
+  const custoEnergia = kWhConsumido * precoKwh;
+  const custoDesgaste = desgasteHora * horasTotais;
+  const custoBase = custoFilamento + custoEnergia + embalagem + custoDesgaste;
+
+  const custoComMargem = custoBase * (1 + margem / 100);
+  const valorMargem = custoComMargem - custoBase;
+  const precoVenda = comissao < 100 ? custoComMargem / (1 - comissao / 100) : custoComMargem;
+  const valorComissao = precoVenda - custoComMargem;
+
+  document.getElementById('calcOutFilamento').textContent = 'R$ ' + fmtMoeda(custoFilamento);
+  document.getElementById('calcOutEnergia').textContent = 'R$ ' + fmtMoeda(custoEnergia);
+  document.getElementById('calcOutEmbalagem').textContent = 'R$ ' + fmtMoeda(embalagem);
+  document.getElementById('calcOutDesgaste').textContent = 'R$ ' + fmtMoeda(custoDesgaste);
+  document.getElementById('calcOutCustoTotal').textContent = 'R$ ' + fmtMoeda(custoBase);
+  document.getElementById('calcOutMargem').textContent = 'R$ ' + fmtMoeda(valorMargem);
+  document.getElementById('calcOutComissao').textContent = 'R$ ' + fmtMoeda(valorComissao);
+  document.getElementById('calcOutPrecoVenda').textContent = 'R$ ' + fmtMoeda(precoVenda);
+  document.getElementById('calcOutQtdLabel').textContent = String(qtd);
+  document.getElementById('calcOutTotalLote').textContent = 'R$ ' + fmtMoeda(precoVenda * qtd);
+}
+function usarPrecoNoProduto(){
+  const nome = document.getElementById('calcNome').value.trim();
+  const precoVendaTxt = document.getElementById('calcOutPrecoVenda').textContent.replace('R$', '').trim();
+  const custoTotalTxt = document.getElementById('calcOutCustoTotal').textContent.replace('R$', '').trim();
+  const peso = document.getElementById('calcPeso').value;
+  const unidadePeso = document.getElementById('calcPesoUnidade').value;
+  abrirFormProduto();
+  if(nome) document.getElementById('fpNome').value = nome;
+  document.getElementById('fpPreco').value = precoVendaTxt;
+  document.getElementById('fpPrecoCusto').value = custoTotalTxt;
+  if(peso) document.getElementById('fpPeso').value = unidadePeso === 'kg' ? (parseFloat(peso) * 1000) : peso;
 }
 
 /* =========================================================

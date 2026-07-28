@@ -957,15 +957,33 @@ function hojeStr(){
   const h = new Date();
   return String(h.getDate()).padStart(2,'0') + '/' + String(h.getMonth()+1).padStart(2,'0') + '/' + h.getFullYear();
 }
-function paraDataObj(brStr){
-  if(!brStr) return null;
-  const p = brStr.split('/');
-  if(p.length !== 3) return null;
-  const d = new Date(parseInt(p[2],10), parseInt(p[1],10)-1, parseInt(p[0],10));
-  return isNaN(d.getTime()) ? null : d;
+function paraDataObj(valor){
+  if(!valor) return null;
+  const str = String(valor);
+  // formato DD/MM/YYYY (usado internamente pelo app)
+  if(str.indexOf('/') !== -1){
+    const p = str.split('/');
+    if(p.length !== 3) return null;
+    const d = new Date(parseInt(p[2],10), parseInt(p[1],10)-1, parseInt(p[0],10));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // formato ISO (YYYY-MM-DD ou com horário) — pode vir da planilha quando o Google Sheets
+  // converte o texto da data em um valor de data real. Usa os componentes de data
+  // (sem fuso horário) pra não variar o dia exibido.
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m){
+    const d = new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
-function somarDias(brStr, dias){
-  const d = paraDataObj(brStr);
+function fmtDataExibir(valor){
+  const d = paraDataObj(valor);
+  if(!d) return esc(valor);
+  return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+function somarDias(valor, dias){
+  const d = paraDataObj(valor);
   if(!d) return '';
   d.setDate(d.getDate() + (parseInt(dias,10) || 0));
   return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
@@ -1347,7 +1365,7 @@ function abrirFormOrcamento(id){
   const o = id ? state.orcamentos.find(x => x.id === id) : null;
   atualizarSelectsClientes();
   document.getElementById('foCliente').value = o ? o.clienteId : '';
-  document.getElementById('foData').value = o ? o.data : hojeStr();
+  document.getElementById('foData').value = o ? fmtDataExibir(o.data) : hojeStr();
   document.getElementById('foValidade').value = o ? o.validadeDias : '7';
   document.getElementById('foStatus').value = o ? o.status : 'Pendente';
   document.getElementById('foFrete').value = o ? fmtMoeda(o.frete) : '0,00';
@@ -1521,7 +1539,7 @@ function renderOrcamentos(){
   lista.forEach(o => {
     const tr = document.createElement('tr');
     const podeGerarConta = o.status === 'Aprovado' && !o.financeiroGerado;
-    tr.innerHTML = `<td>${esc(o.numero)}</td><td>${esc(o.data)}</td><td>${esc(nomeCliente(o.clienteId))}</td><td>R$ ${fmtMoeda(o.total)}</td><td>${badgeStatusOrc(o.status)}</td>
+    tr.innerHTML = `<td>${esc(o.numero)}</td><td>${fmtDataExibir(o.data)}</td><td>${esc(nomeCliente(o.clienteId))}</td><td>R$ ${fmtMoeda(o.total)}</td><td>${badgeStatusOrc(o.status)}</td>
       <td class="acoes">
         ${podeGerarConta ? `<button class="btn-icon" onclick="gerarContaReceber('${o.id}')" title="Gerar conta a receber">R$+</button>` : ''}
         <button class="btn-icon" onclick="imprimirOrcamento('${o.id}')" title="Imprimir / PDF">🖨</button>
@@ -1539,7 +1557,7 @@ function gerarContaReceber(orcId){
     tipo: 'receber',
     descricao: 'Orçamento nº ' + o.numero + ' - ' + nomeCliente(o.clienteId),
     valor: o.total,
-    vencimento: somarDias(o.data, o.validadeDias) || o.data,
+    vencimento: somarDias(o.data, o.validadeDias) || fmtDataExibir(o.data),
     categoria: 'Orçamento',
     clienteId: o.clienteId,
     orcamentoId: o.id,
@@ -1558,7 +1576,7 @@ function imprimirOrcamento(id){
   if(!o) return;
   const c = state.clientes.find(x => x.id === o.clienteId) || {};
   document.getElementById('poNumero').textContent = o.numero;
-  document.getElementById('poData').textContent = o.data;
+  document.getElementById('poData').textContent = fmtDataExibir(o.data);
   document.getElementById('poValidade').textContent = (o.validadeDias || '7') + ' dias';
   document.getElementById('poCliente').textContent = c.nome || '';
   document.getElementById('poTelefone').textContent = c.telefone || '';
@@ -1599,7 +1617,7 @@ function abrirFormFinanceiro(id){
   document.getElementById('ffTipo').value = f.tipo || 'receber';
   document.getElementById('ffDescricao').value = f.descricao || '';
   document.getElementById('ffValor').value = f.valor !== undefined ? fmtMoeda(f.valor) : '0,00';
-  document.getElementById('ffVencimento').value = f.vencimento || hojeStr();
+  document.getElementById('ffVencimento').value = f.vencimento ? fmtDataExibir(f.vencimento) : hojeStr();
   document.getElementById('ffCategoria').value = f.categoria || '';
   document.getElementById('ffCliente').value = f.clienteId || '';
   document.getElementById('ffStatus').value = f.status || 'pendente';
@@ -1673,7 +1691,7 @@ function renderFinanceiro(){
       <td>${esc(f.descricao)}</td>
       <td>${esc(f.categoria)}</td>
       <td>${esc(nomeClienteOpcional(f.clienteId))}</td>
-      <td>${esc(f.vencimento)}</td>
+      <td>${fmtDataExibir(f.vencimento)}</td>
       <td>R$ ${fmtMoeda(f.valor)}</td>
       <td>${statusBadge}</td>
       <td class="acoes">
@@ -1736,7 +1754,7 @@ function renderDashboard(){
   venc.forEach(({f}) => {
     const vencido = estaVencido(f);
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${esc(f.descricao)}</td><td><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'Pagar' : 'Receber'}</span></td><td>${esc(nomeClienteOpcional(f.clienteId))}</td><td style="${vencido?'color:#c0392b;font-weight:bold;':''}">${esc(f.vencimento)}</td><td>R$ ${fmtMoeda(f.valor)}</td>`;
+    tr.innerHTML = `<td>${esc(f.descricao)}</td><td><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'Pagar' : 'Receber'}</span></td><td>${esc(nomeClienteOpcional(f.clienteId))}</td><td style="${vencido?'color:#c0392b;font-weight:bold;':''}">${fmtDataExibir(f.vencimento)}</td><td>R$ ${fmtMoeda(f.valor)}</td>`;
     corpoVenc.appendChild(tr);
   });
 

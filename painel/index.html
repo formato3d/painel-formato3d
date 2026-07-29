@@ -1109,9 +1109,11 @@ const CONFIG = {
 
 function estadoPadrao(){
   return {
-    // chavePix fica vazia até a conta Pix da empresa ser criada — depois é só preencher aqui
-    // (nome, cnpj e whatsapp abaixo funcionam do mesmo jeito: editados direto no código).
-    empresa:{ nome:'FORMATO 3D', subtitulo:'Impressão e Personalizados', cnpj:'67.905.742/0001-37', whatsapp:'(92) 98632-6919', cidadePadrao:'Manaus/AM', chavePix:'' },
+    // Chave Pix (Banco Inter) — chave telefone, no formato exigido pelo BR Code (+55DDDNUMERO).
+    // nomePix é o nome do titular da conta cadastrado no banco (aparece no QR Code) — precisa
+    // bater com o nome real da conta Pix, senão alguns apps de banco mostram aviso de divergência.
+    // (nome, cnpj e whatsapp abaixo funcionam do mesmo jeito: editados direto no código.)
+    empresa:{ nome:'FORMATO 3D', subtitulo:'Impressão e Personalizados', cnpj:'67.905.742/0001-37', whatsapp:'(92) 98632-6919', cidadePadrao:'Manaus/AM', chavePix:'+5592986326919', nomePix:'MARIANA B COUTINHO' },
     proximoNumero: 1,
     seq:{ cliente:1, produto:1, orcamento:1, financeiro:1, modeloItem:1, filamento:1 },
     clientes: [],
@@ -2229,7 +2231,8 @@ function renderizarPixOrcamento(o){
     return;
   }
   const cidade = (state.empresa.cidadePadrao || '').split('/')[0];
-  const payload = montarPayloadPix(chave, state.empresa.nome, cidade, o.total, 'ORC' + String(o.numero).padStart(4, '0'));
+  const nomeRecebedor = state.empresa.nomePix || state.empresa.nome;
+  const payload = montarPayloadPix(chave, nomeRecebedor, cidade, o.total, 'ORC' + String(o.numero).padStart(4, '0'));
   if(!payload){ wrap.classList.add('hidden'); return; }
   document.getElementById('poPixCopiaCola').value = payload;
   const canvas = document.getElementById('poPixCanvas');

@@ -427,8 +427,11 @@
     @page{ margin:14mm; }
   }
 
-  /* ===== Responsivo (celular / tablet) ===== */
-  @media (max-width:760px){
+  /* ===== Responsivo (celular / tablet) =====
+     Importante: essas regras usam "screen and" pra nunca afetar a impressão/PDF do
+     orçamento — sem isso, imprimir de um celular (tela estreita) fazia as tabelas do
+     orçamento virarem uma lista rolável e ficarem cortadas/desalinhadas no papel. */
+  @media screen and (max-width:760px){
     header.topbar{ padding:8px 12px; gap:8px 10px; }
     header.topbar img{ height:30px; }
     .brand{ margin-right:0; }
@@ -452,7 +455,7 @@
     .calc-wrap{ grid-template-columns:1fr; }
     .calc-result{ position:static; }
   }
-  @media (max-width:420px){
+  @media screen and (max-width:420px){
     .cards-grid{ grid-template-columns:1fr; }
   }
 

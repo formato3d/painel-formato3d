@@ -1,0 +1,12 @@
+{
+  "name": "painel-formato3d-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Testes automatizados (Playwright) do Painel Formato 3D — rodam contra painel/index.html com um backend falso local, sem tocar na planilha real.",
+  "scripts": {
+    "test": "node smoke.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.47.0"
+  }
+}

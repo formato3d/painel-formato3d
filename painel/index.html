@@ -273,6 +273,26 @@
   .photo-preview img{ width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
   .photo-preview button{ background:none; border:1px solid var(--red); color:var(--red); border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
 
+  /* ===== Upload de anexo (boleto / comprovante) — mesmo visual do upload de foto ===== */
+  .file-upload{
+    border:2px dashed var(--line);
+    border-radius:10px;
+    padding:16px;
+    text-align:center;
+    cursor:pointer;
+    background:var(--surface-2);
+    position:relative;
+  }
+  .file-upload:hover{ border-color:var(--navy); }
+  .file-upload input[type="file"]{ position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+  .file-upload .ph-txt{ font-size:12.5px; color:var(--gray); }
+  .file-upload .ph-txt b{ color:var(--navy); }
+  .file-preview{ display:flex; align-items:center; gap:12px; margin-top:10px; }
+  .file-preview a{ font-size:13px; color:var(--navy); text-decoration:none; word-break:break-all; }
+  .file-preview a:hover{ text-decoration:underline; }
+  .file-preview button{ background:none; border:1px solid var(--red); color:var(--red); border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; flex-shrink:0; }
+  .anexos-cell a{ font-size:16px; text-decoration:none; margin-right:6px; }
+
   /* ===== Modal ===== */
   .modal-overlay{
     position:fixed; inset:0; background:rgba(20,20,35,0.55);
@@ -1034,6 +1054,30 @@ Obrigado pela preferência!</textarea></div>
           </select>
         </div>
       </div>
+      <div class="form-grid wide">
+        <div class="field">
+          <label>Anexar boleto/conta (opcional)</label>
+          <div class="file-upload" id="ffAnexoBoletoUpload">
+            <input type="file" id="ffAnexoBoleto" accept="application/pdf,image/png,image/jpeg,image/webp" onchange="processarAnexoFinanceiro(this,'boleto')">
+            <div class="ph-txt"><b>Anexar boleto</b><br>PDF, JPG, PNG ou WEBP até 8MB</div>
+          </div>
+          <div class="file-preview hidden" id="ffAnexoBoletoPreviewWrap">
+            <a id="ffAnexoBoletoLink" href="#" target="_blank" rel="noopener">📄 <span id="ffAnexoBoletoNome"></span></a>
+            <button type="button" onclick="removerAnexoFinanceiro('boleto')">Remover</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Comprovante de pagamento (opcional)</label>
+          <div class="file-upload" id="ffAnexoComprovanteUpload">
+            <input type="file" id="ffAnexoComprovante" accept="application/pdf,image/png,image/jpeg,image/webp" onchange="processarAnexoFinanceiro(this,'comprovante')">
+            <div class="ph-txt"><b>Anexar comprovante</b><br>PDF, JPG, PNG ou WEBP até 8MB</div>
+          </div>
+          <div class="file-preview hidden" id="ffAnexoComprovantePreviewWrap">
+            <a id="ffAnexoComprovanteLink" href="#" target="_blank" rel="noopener">🧾 <span id="ffAnexoComprovanteNome"></span></a>
+            <button type="button" onclick="removerAnexoFinanceiro('comprovante')">Remover</button>
+          </div>
+        </div>
+      </div>
       <div class="form-actions">
         <button class="btn" onclick="salvarFinanceiro()">Salvar</button>
         <button class="btn secondary" onclick="fecharFormFinanceiro()">Cancelar</button>
@@ -1041,7 +1085,7 @@ Obrigado pela preferência!</textarea></div>
     </div>
 
     <table class="data">
-      <thead><tr><th>Tipo</th><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Tipo</th><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Anexos</th><th></th></tr></thead>
       <tbody id="corpoTabelaFinanceiro"></tbody>
     </table>
   </section>

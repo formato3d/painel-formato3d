@@ -2,6 +2,85 @@
    FINANCEIRO
    ========================================================= */
 let financeiroEditId = null;
+// Anexos (boleto/comprovante) da conta que está sendo criada/editada no formulário.
+// Cada chave guarda { url, nome } depois de enviado pro Drive, ou null se não tem anexo.
+let ffAnexos = { boleto: null, comprovante: null };
+
+// Prefixo dos ids no HTML pra cada tipo de anexo (ffAnexoBoleto... / ffAnexoComprovante...).
+function prefixoAnexoEl(tipo){
+  return tipo === 'boleto' ? 'ffAnexoBoleto' : 'ffAnexoComprovante';
+}
+function atualizarPreviewAnexo(tipo){
+  const pref = prefixoAnexoEl(tipo);
+  const dados = ffAnexos[tipo];
+  const uploadEl = document.getElementById(pref + 'Upload');
+  const previewEl = document.getElementById(pref + 'PreviewWrap');
+  if(dados && dados.url){
+    document.getElementById(pref + 'Link').href = dados.url;
+    document.getElementById(pref + 'Nome').textContent = dados.nome || 'arquivo';
+    previewEl.classList.remove('hidden');
+    uploadEl.classList.add('hidden');
+  } else {
+    previewEl.classList.add('hidden');
+    uploadEl.classList.remove('hidden');
+  }
+}
+function removerAnexoFinanceiro(tipo){
+  ffAnexos[tipo] = null;
+  const input = document.getElementById(prefixoAnexoEl(tipo));
+  if(input) input.value = '';
+  atualizarPreviewAnexo(tipo);
+}
+// Envia o arquivo (boleto ou comprovante) pro servidor assim que a pessoa escolhe —
+// fica salvo no Drive na hora, e só o link é guardado no formulário até "Salvar".
+function processarAnexoFinanceiro(input, tipo){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(!/^(application\/pdf|image\/(png|jpeg|webp))$/.test(file.type)){
+    alert('Envie um arquivo em PDF, JPG, PNG ou WEBP.');
+    input.value = '';
+    return;
+  }
+  if(file.size > 8 * 1024 * 1024){
+    alert('O arquivo deve ter até 8MB.');
+    input.value = '';
+    return;
+  }
+  const pref = prefixoAnexoEl(tipo);
+  const txtEl = document.querySelector('#' + pref + 'Upload .ph-txt');
+  const txtOriginal = txtEl.innerHTML;
+  txtEl.innerHTML = '<b>Enviando...</b>';
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const base64 = String(e.target.result).split(',')[1] || '';
+    fetch(CONFIG.URL_API, {
+      method: 'POST',
+      body: JSON.stringify({
+        token: CONFIG.TOKEN,
+        sessao: sessaoAtual(),
+        action: 'uploadAnexoFinanceiro',
+        nomeArquivo: file.name,
+        mimeType: file.type,
+        conteudoBase64: base64
+      })
+    })
+      .then(r => r.json())
+      .then(resp => {
+        txtEl.innerHTML = txtOriginal;
+        if(sessaoInvalida(resp.erro)){ voltarParaLogin('Sua sessão expirou — faça login novamente.'); return; }
+        if(resp.erro){ alert('Não foi possível enviar o arquivo: ' + resp.erro); input.value = ''; return; }
+        ffAnexos[tipo] = { url: resp.url, nome: resp.nome || file.name };
+        atualizarPreviewAnexo(tipo);
+      })
+      .catch(err => {
+        txtEl.innerHTML = txtOriginal;
+        alert('Não foi possível enviar o arquivo agora — verifique sua internet.');
+        input.value = '';
+        console.error(err);
+      });
+  };
+  reader.readAsDataURL(file);
+}
 
 function abrirFormFinanceiro(id){
   financeiroEditId = id || null;
@@ -14,6 +93,12 @@ function abrirFormFinanceiro(id){
   document.getElementById('ffCategoria').value = f.categoria || '';
   document.getElementById('ffCliente').value = f.clienteId || '';
   document.getElementById('ffStatus').value = f.status || 'pendente';
+  document.getElementById('ffAnexoBoleto').value = '';
+  document.getElementById('ffAnexoComprovante').value = '';
+  ffAnexos.boleto = f.boletoUrl ? { url: f.boletoUrl, nome: f.boletoNome || 'boleto' } : null;
+  ffAnexos.comprovante = f.comprovanteUrl ? { url: f.comprovanteUrl, nome: f.comprovanteNome || 'comprovante' } : null;
+  atualizarPreviewAnexo('boleto');
+  atualizarPreviewAnexo('comprovante');
   document.getElementById('formFinanceiroTitulo').textContent = id ? 'Editar conta' : 'Nova conta';
   document.getElementById('formFinanceiroWrap').classList.remove('hidden');
   document.getElementById('ffDescricao').focus();
@@ -32,7 +117,11 @@ function salvarFinanceiro(){
     vencimento: document.getElementById('ffVencimento').value.trim(),
     categoria: document.getElementById('ffCategoria').value.trim(),
     clienteId: document.getElementById('ffCliente').value || null,
-    status: document.getElementById('ffStatus').value
+    status: document.getElementById('ffStatus').value,
+    boletoUrl: ffAnexos.boleto ? ffAnexos.boleto.url : '',
+    boletoNome: ffAnexos.boleto ? ffAnexos.boleto.nome : '',
+    comprovanteUrl: ffAnexos.comprovante ? ffAnexos.comprovante.url : '',
+    comprovanteNome: ffAnexos.comprovante ? ffAnexos.comprovante.nome : ''
   };
   if(financeiroEditId){
     Object.assign(state.financeiro.find(x => x.id === financeiroEditId), dados);
@@ -72,7 +161,7 @@ function renderFinanceiro(){
   tbody.innerHTML = '';
   const lista = financeiroAtivos().filter(f => (!filtroTipo || f.tipo === filtroTipo) && (!filtroStatus || f.status === filtroStatus));
   if(lista.length === 0){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Nenhum lançamento encontrado.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Nenhum lançamento encontrado.</td></tr>';
   }
   lista.forEach(f => {
     const tr = document.createElement('tr');
@@ -80,6 +169,7 @@ function renderFinanceiro(){
     const statusBadge = f.status === 'pago'
       ? '<span class="badge pago">Pago/Recebido</span>'
       : (vencido ? '<span class="badge vencido">Vencido</span>' : '<span class="badge pendente">Pendente</span>');
+    const anexos = `${f.boletoUrl ? `<a href="${esc(f.boletoUrl)}" target="_blank" rel="noopener" title="Abrir boleto${f.boletoNome ? ': ' + esc(f.boletoNome) : ''}">📄</a>` : ''}${f.comprovanteUrl ? `<a href="${esc(f.comprovanteUrl)}" target="_blank" rel="noopener" title="Abrir comprovante${f.comprovanteNome ? ': ' + esc(f.comprovanteNome) : ''}">🧾</a>` : ''}`;
     tr.innerHTML = `
       <td><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'A pagar' : 'A receber'}</span></td>
       <td>${esc(f.descricao)}</td>
@@ -88,6 +178,7 @@ function renderFinanceiro(){
       <td>${fmtDataExibir(f.vencimento)}</td>
       <td>R$ ${fmtMoeda(f.valor)}</td>
       <td>${statusBadge}</td>
+      <td class="anexos-cell">${anexos || '—'}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="alternarStatusFinanceiro('${f.id}')" title="Marcar como ${f.status === 'pendente' ? 'pago/recebido' : 'pendente'}">${f.status === 'pendente' ? '✓' : '↺'}</button>
         <button class="btn-icon" onclick="abrirFormFinanceiro('${f.id}')" title="Editar">✎</button>

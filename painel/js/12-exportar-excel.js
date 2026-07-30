@@ -43,7 +43,9 @@ function exportarFinanceiroExcel(){
       'Cliente': nomeClienteOpcional(f.clienteId),
       'Vencimento': f.vencimento ? fmtDataExibir(f.vencimento) : '',
       'Valor (R$)': f.valor || 0,
-      'Status': f.status === 'pago' ? 'Pago/Recebido' : 'Pendente'
+      'Status': f.status === 'pago' ? 'Pago/Recebido' : 'Pendente',
+      'Boleto (link)': f.boletoUrl || '',
+      'Comprovante (link)': f.comprovanteUrl || ''
     }));
   if(linhas.length === 0){ alert('Não há lançamentos pra exportar.'); return; }
   const ws = XLSX.utils.json_to_sheet(linhas);

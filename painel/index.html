@@ -1119,6 +1119,10 @@ function estadoPadrao(){
     empresa:{ nome:'FORMATO 3D', subtitulo:'Impressão e Personalizados', cnpj:'67.905.742/0001-37', whatsapp:'(92) 98632-6919', cidadePadrao:'Manaus/AM', chavePix:'+5592986326919', nomePix:'MARIANA B COUTINHO' },
     proximoNumero: 1,
     seq:{ cliente:1, produto:1, orcamento:1, financeiro:1, modeloItem:1, filamento:1 },
+    // Número de revisão da planilha no servidor — usado só pra detectar quando esta aba
+    // ficou desatualizada (outra aba/dispositivo salvou algo mais novo). Nunca editado
+    // pela interface, só lido/enviado no carregar/salvar.
+    revisao: 0,
     clientes: [],
     produtos: [],
     orcamentos: [],
@@ -1131,6 +1135,11 @@ let state = estadoPadrao();
 let dirty = false;
 let carregando = true;
 let autoSaveTimer = null;
+// Fica true quando o servidor recusa um salvamento por a página estar desatualizada
+// (outra aba/dispositivo salvou algo mais novo nesse meio-tempo) — trava novos
+// salvamentos automáticos até a pessoa recarregar a página, pra não arriscar
+// sobrescrever por cima do que foi salvo depois.
+let bloqueadoPorConflito = false;
 
 function uid(tipo){
   const n = state.seq[tipo] || 1;
@@ -1139,7 +1148,7 @@ function uid(tipo){
 }
 
 function marcarAlterado(){
-  if(carregando) return;
+  if(carregando || bloqueadoPorConflito) return;
   dirty = true;
   const el = document.getElementById('statusSalvo');
   el.textContent = 'salvando na planilha...';
@@ -1177,7 +1186,9 @@ function salvarNoServidor(){
     .then(r => r.json())
     .then(resp => {
       if(sessaoInvalida(resp.erro)){ voltarParaLogin('Sua sessão expirou — faça login novamente.'); return; }
+      if(resp.erro === 'dados_desatualizados'){ avisarDadosDesatualizados(); return; }
       if(resp.erro) throw new Error(resp.erro);
+      state.revisao = resp.revisao;
       marcarSalvo();
     })
     .catch(err => {
@@ -1186,6 +1197,21 @@ function salvarNoServidor(){
       el.classList.add('dirty');
       console.error(err);
     });
+}
+
+// Chamado quando o servidor recusa salvar por causa de uma revisão desatualizada —
+// ou seja, essa aba carregou os dados antes de alguém (outra aba, outro celular, outro
+// usuário) ter salvo algo mais novo. Em vez de arriscar sobrescrever esses dados mais
+// novos, avisamos bem claro e paramos de salvar automaticamente até recarregar.
+function avisarDadosDesatualizados(){
+  clearTimeout(autoSaveTimer);
+  bloqueadoPorConflito = true;
+  const el = document.getElementById('statusSalvo');
+  el.textContent = 'dados desatualizados — recarregue a página (F5)';
+  el.classList.add('dirty');
+  if(window.__avisoDadosDesatualizadosMostrado) return;
+  window.__avisoDadosDesatualizadosMostrado = true;
+  alert('Estes dados foram alterados em outra aba, outro celular ou por outra pessoa enquanto esta página estava aberta.\n\nPra não apagar por cima essas mudanças, o painel parou de salvar automaticamente.\n\nRecarregue a página (F5) agora para ver as informações mais recentes antes de continuar editando.');
 }
 
 function carregarDoServidor(){

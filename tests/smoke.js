@@ -298,6 +298,91 @@ function assert(condicao, mensagem){
   await page.evaluate(() => renderFinanceiro());
   assert(await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent.includes('3/10')), 'a tabela do Financeiro mostra a etiqueta "3/10" identificando a parcela na listagem');
 
+  console.log('Grupo: cache local (localStorage) — entra já com os dados na tela, sem esperar a rede');
+  const chaveCache = await page.evaluate(() => CHAVE_CACHE_LOCAL);
+  const semCacheAindaOk = await page.evaluate((chave) => {
+    const backup = localStorage.getItem(chave);
+    localStorage.removeItem(chave);
+    const resultado = carregarCacheLocal();
+    if(backup) localStorage.setItem(chave, backup); // restaura pro resto dos testes
+    return resultado;
+  }, chaveCache);
+  assert(semCacheAindaOk === false, 'carregarCacheLocal() devolve false sem quebrar nada quando ainda não existe cache (ex.: 1º acesso no aparelho)');
+
+  await page.evaluate(() => atualizarAgora());
+  await page.waitForTimeout(900);
+  const cacheApósCarregar = await page.evaluate((chave) => {
+    const bruto = localStorage.getItem(chave);
+    return bruto ? JSON.parse(bruto) : null;
+  }, chaveCache);
+  assert(!!cacheApósCarregar && Array.isArray(cacheApósCarregar.state && cacheApósCarregar.state.clientes), 'depois de carregar do servidor, uma cópia dos dados fica guardada no navegador (cache local)');
+
+  const resultadoCache = await page.evaluate(() => {
+    state = estadoPadrao();
+    document.getElementById('corpoTabelaClientes').innerHTML = '';
+    const achou = carregarCacheLocal();
+    return { achou, qtdClientes: state.clientes.length, carregandoAgora: carregando, statusTexto: document.getElementById('statusSalvo').textContent };
+  });
+  assert(resultadoCache.achou === true, 'carregarCacheLocal() encontra o cache salvo e devolve true');
+  assert(resultadoCache.qtdClientes > 0, 'os dados do cache já aparecem no "state" na hora, sem esperar nenhuma resposta do servidor');
+  assert(resultadoCache.carregandoAgora === false, 'depois de mostrar o cache o painel já não fica mais no estado de "carregando"');
+  assert(/mostrando dados salvos/.test(resultadoCache.statusTexto), 'o aviso deixa claro que são os dados salvos localmente, enquanto confirma com o servidor');
+  assert(await page.evaluate(() => document.getElementById('corpoTabelaClientes').children.length > 0), 'a tabela de clientes já aparece preenchida na hora, a partir do cache (carregarCacheLocal já chama renderTudo)');
+
+  const semErroAoFalharCache = await page.evaluate(() => {
+    const original = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function(){ throw new Error('QuotaExceededError simulado'); };
+    let ok = true;
+    try { salvarCacheLocal(); } catch(e){ ok = false; }
+    localStorage.setItem = original;
+    return ok;
+  });
+  assert(semErroAoFalharCache, 'se o navegador recusar guardar o cache (ex.: sem espaço, modo anônimo), salvarCacheLocal() não trava o painel com um erro não tratado');
+
+  console.log('Grupo: uma edição em andamento não é sobrescrita por uma busca em segundo plano');
+  await page.evaluate(async () => {
+    // Simula outro dispositivo salvando uma mudança nesse meio-tempo, direto no backend.
+    const atual = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
+    atual.clientes = atual.clientes.map(c => c.id === 'cli_1' ? Object.assign({}, c, {nome:'ATUALIZADO POR OUTRO DISPOSITIVO'}) : c);
+    await fetch(CONFIG.URL_API, { method:'POST', body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: atual }) });
+  });
+  await page.evaluate(() => {
+    state.clientes.find(c => c.id === 'cli_1').nome = 'EDITANDO AGORA (ainda não salvo)';
+    dirty = true;
+  });
+  await page.evaluate(() => carregarDoServidor());
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => state.clientes.find(c => c.id === 'cli_1').nome === 'EDITANDO AGORA (ainda não salvo)'), 'uma busca em segundo plano não sobrescreve os dados na tela enquanto tem uma edição sendo salva (dirty=true), mesmo se o servidor já tem algo mais novo');
+  await page.evaluate(() => { dirty = false; carregarDoServidor(); });
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => state.clientes.find(c => c.id === 'cli_1').nome === 'ATUALIZADO POR OUTRO DISPOSITIVO'), 'assim que a edição termina de salvar (dirty=false), a próxima busca já aplica normalmente os dados mais novos do servidor');
+
+  console.log('Grupo: falha ao buscar dados não trava o painel numa tela de erro pedindo F5');
+  const urlOriginal = await page.evaluate(() => CONFIG.URL_API);
+  await page.evaluate(() => { CONFIG.URL_API = 'http://127.0.0.1:9/rota-que-nao-existe'; });
+  await page.evaluate(() => carregarDoServidor());
+  await page.waitForTimeout(500);
+  const statusAposFalha = await page.evaluate(() => document.getElementById('statusSalvo').textContent);
+  assert(/não foi possível atualizar agora/.test(statusAposFalha) && /tentando de novo/.test(statusAposFalha), 'quando a busca falha mas o painel já tem dados na tela, o aviso é discreto — não pede pra recarregar a página');
+  assert(await page.evaluate(() => state.clientes.length > 0), 'os dados que já estavam na tela continuam lá mesmo depois de uma falha ao tentar atualizar');
+  await page.evaluate((url) => { CONFIG.URL_API = url; }, urlOriginal);
+  await page.evaluate(() => atualizarAgora());
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => document.getElementById('statusSalvo').textContent.startsWith('salvo às')), 'o botão de atualizar agora (🔄 atualizarAgora()) recupera normalmente assim que a conexão volta');
+
+  console.log('Grupo: cache local só é apagado num "Sair" explícito, não numa sessão expirada');
+  assert(await page.evaluate((chave) => !!localStorage.getItem(chave), chaveCache), 'existe cache local guardado antes de testar a limpeza');
+  await page.evaluate(() => voltarParaLogin('Sua sessão expirou — faça login novamente.'));
+  assert(await page.evaluate((chave) => !!localStorage.getItem(chave), chaveCache), 'uma sessão expirada não apaga o cache local — a pessoa ainda quer ver os dados rápido no próximo login');
+  await page.evaluate(() => {
+    localStorage.setItem('sessaoToken', 'sess-abc');
+    localStorage.setItem('sessaoUsuario', 'felipe');
+    document.body.classList.add('autenticado');
+  });
+  await page.evaluate(() => carregarDoServidor());
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => document.body.classList.contains('autenticado')), 're-autentica normalmente pra continuar os próximos testes');
+
   console.log('Grupo: exportar Excel não quebra mesmo sem a lib carregada');
   const exportResult = await page.evaluate(() => {
     try { exportarFinanceiroExcel(); return 'sem erro'; } catch(e) { return 'ERRO: ' + e.message; }
@@ -320,6 +405,7 @@ function assert(condicao, mensagem){
   chamouLogout = await page.evaluate(() => window.__logoutOk);
   assert(chamouLogout, 'sair() manda a ação "logout" pro backend');
   assert(await page.evaluate(() => !document.body.classList.contains('autenticado')), 'painel volta pra tela de login depois de sair');
+  assert(await page.evaluate((chave) => localStorage.getItem(chave) === null, chaveCache), 'um "Sair" explícito apaga o cache local guardado no navegador (privacidade em computador compartilhado)');
 
   console.log('Grupo: nenhum erro de JS não tratado durante os testes');
   assert(errosJs.length === 0, 'sem erros de JavaScript no console (' + JSON.stringify(errosJs) + ')');

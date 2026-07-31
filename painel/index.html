@@ -366,12 +366,21 @@
   .badge.pago{ background:var(--green-bg); color:var(--green); }
   .badge.vencido{ background:var(--red-bg); color:var(--red); }
   .badge.desencontrado{ background:var(--amber-bg); color:var(--amber); margin-left:4px; cursor:help; }
+  .badge.parcela{ background:var(--surface-2); color:var(--navy); border:1px solid var(--line); margin-left:6px; font-weight:normal; }
 
   .count-tag{ font-size:12px; color:var(--gray); }
 
   /* ===== Vínculo orçamento <-> financeiro ===== */
   .ff-vinculo-aviso{ background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:9px 14px; margin-bottom:14px; font-size:12.5px; color:var(--gray); }
   .ff-vinculo-aviso a{ color:var(--navy); font-weight:bold; text-decoration:underline; cursor:pointer; }
+
+  /* ===== Parcelamento automático (Financeiro) ===== */
+  .ff-parcelado-bloco{ border:1px dashed var(--line); border-radius:8px; padding:10px 14px; margin-bottom:14px; }
+  .ff-parcelado-bloco .chk{ display:flex; align-items:center; gap:7px; font-size:13px; font-weight:bold; color:var(--navy); cursor:pointer; }
+  .ff-parcelado-bloco .chk input{ width:auto; accent-color:var(--navy); cursor:pointer; }
+  .ff-parcelado-campos{ margin-top:10px; }
+  .ff-parcela-preview{ font-size:12.5px; color:var(--navy); font-weight:bold; background:var(--surface-2); border-radius:6px; padding:8px 10px; line-height:1.4; }
+  .ff-parcelado-aviso{ font-size:11.5px; color:var(--gray); margin-top:8px; }
   .campo-travado{ background:var(--surface-2) !important; color:var(--gray) !important; cursor:not-allowed; }
 
   /* ===== Itens de orçamento ===== */
@@ -1053,6 +1062,7 @@ Obrigado pela preferência!</textarea></div>
     <div id="formFinanceiroWrap" class="form-card hidden">
       <h3 id="formFinanceiroTitulo">Nova conta</h3>
       <div class="ff-vinculo-aviso hidden" id="ffVinculoAviso">🔗 Vinculado ao <a href="#" id="ffVinculoLink">orçamento</a> — cliente e valor são controlados por ele; edite lá se precisar mudar.</div>
+      <div class="ff-vinculo-aviso hidden" id="ffParcelaInfoAviso">🔁 Parcela <b id="ffParcelaInfoTexto"></b> desta compra/venda parcelada — as outras parcelas foram criadas junto e cada uma é editada/paga separadamente.</div>
       <div class="form-grid">
         <div class="field"><label>Tipo *</label>
           <select id="ffTipo">
@@ -1061,8 +1071,23 @@ Obrigado pela preferência!</textarea></div>
           </select>
         </div>
         <div class="field"><label>Descrição *</label><input id="ffDescricao"></div>
-        <div class="field"><label>Valor (R$) *</label><input id="ffValor" placeholder="0,00"></div>
-        <div class="field"><label>Vencimento</label><input id="ffVencimento" placeholder="dd/mm/aaaa"></div>
+        <div class="field"><label id="ffValorLabel">Valor (R$) *</label><input id="ffValor" placeholder="0,00" oninput="atualizarPreviewParcelas()"></div>
+        <div class="field"><label id="ffVencimentoLabel">Vencimento</label><input id="ffVencimento" placeholder="dd/mm/aaaa" oninput="atualizarPreviewParcelas()"></div>
+      </div>
+      <div class="ff-parcelado-bloco hidden" id="ffParceladoBloco">
+        <label class="chk"><input type="checkbox" id="ffParcelado" onchange="alternarParcelamento()"> Parcelar esta conta automaticamente</label>
+        <div class="form-grid ff-parcelado-campos hidden" id="ffParceladoCampos">
+          <div class="field"><label>Nº de parcelas *</label><input id="ffParcelas" type="number" min="2" max="60" placeholder="Ex: 10" oninput="atualizarPreviewParcelas()"></div>
+          <div class="field"><label>Intervalo entre parcelas</label>
+            <select id="ffIntervaloParcela" onchange="atualizarPreviewParcelas()">
+              <option value="mensal">Mensal</option>
+              <option value="quinzenal">Quinzenal (15 em 15 dias)</option>
+              <option value="semanal">Semanal (7 em 7 dias)</option>
+            </select>
+          </div>
+          <div class="field"><label>Prévia</label><div class="ff-parcela-preview" id="ffParcelaPreview">—</div></div>
+        </div>
+        <div class="ff-parcelado-aviso">O valor acima é o valor total da compra/venda — o painel divide igualmente entre as parcelas (a 1ª usa a data de Vencimento informada) e cria um lançamento pendente pra cada uma, já com a data de vencimento certa. Depois de criadas, cada parcela é editada, marcada como paga e excluída separadamente.</div>
       </div>
       <div class="form-grid">
         <div class="field"><label>Categoria</label><input id="ffCategoria" placeholder="Fornecedor, aluguel, venda..."></div>

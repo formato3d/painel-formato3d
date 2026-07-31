@@ -365,8 +365,14 @@
   .badge.receber{ background:var(--green-bg); color:var(--green); }
   .badge.pago{ background:var(--green-bg); color:var(--green); }
   .badge.vencido{ background:var(--red-bg); color:var(--red); }
+  .badge.desencontrado{ background:var(--amber-bg); color:var(--amber); margin-left:4px; cursor:help; }
 
   .count-tag{ font-size:12px; color:var(--gray); }
+
+  /* ===== Vínculo orçamento <-> financeiro ===== */
+  .ff-vinculo-aviso{ background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:9px 14px; margin-bottom:14px; font-size:12.5px; color:var(--gray); }
+  .ff-vinculo-aviso a{ color:var(--navy); font-weight:bold; text-decoration:underline; cursor:pointer; }
+  .campo-travado{ background:var(--surface-2) !important; color:var(--gray) !important; cursor:not-allowed; }
 
   /* ===== Itens de orçamento ===== */
   table.itens-orc{ width:100%; border-collapse:collapse; margin-bottom:10px; }
@@ -1046,6 +1052,7 @@ Obrigado pela preferência!</textarea></div>
 
     <div id="formFinanceiroWrap" class="form-card hidden">
       <h3 id="formFinanceiroTitulo">Nova conta</h3>
+      <div class="ff-vinculo-aviso hidden" id="ffVinculoAviso">🔗 Vinculado ao <a href="#" id="ffVinculoLink">orçamento</a> — cliente e valor são controlados por ele; edite lá se precisar mudar.</div>
       <div class="form-grid">
         <div class="field"><label>Tipo *</label>
           <select id="ffTipo">

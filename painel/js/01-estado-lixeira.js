@@ -22,7 +22,7 @@ function estadoPadrao(){
     // responsavel é o nome que aparece assinando os recibos gerados pelo painel.
     empresa:{ nome:'FORMATO 3D', subtitulo:'Impressão e Personalizados', cnpj:'67.905.742/0001-37', whatsapp:'(92) 98632-6919', cidadePadrao:'Manaus/AM', chavePix:'+5592986326919', nomePix:'MARIANA B COUTINHO', responsavel:'Camila Barroncas dos Santos' },
     proximoNumero: 1,
-    seq:{ cliente:1, produto:1, orcamento:1, financeiro:1, modeloItem:1, filamento:1, recibo:1 },
+    seq:{ cliente:1, produto:1, orcamento:1, financeiro:1, modeloItem:1, filamento:1, recibo:1, parcelamento:1 },
     // Número de revisão da planilha no servidor — usado só pra detectar quando esta aba
     // ficou desatualizada (outra aba/dispositivo salvou algo mais novo). Nunca editado
     // pela interface, só lido/enviado no carregar/salvar.

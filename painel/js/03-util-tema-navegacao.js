@@ -45,6 +45,19 @@ function somarDias(valor, dias){
   d.setDate(d.getDate() + (parseInt(dias,10) || 0));
   return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 }
+// Soma meses a uma data (usado pro vencimento das parcelas mensais). Trata fim de mês
+// direito (ex.: 31/01 + 1 mês vira 28/02 ou 29/02, nunca "03/03") em vez de deixar o
+// Date estourar pro mês seguinte sozinho.
+function somarMeses(valor, meses){
+  const d = paraDataObj(valor);
+  if(!d) return '';
+  const diaOriginal = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + (parseInt(meses,10) || 0));
+  const ultimoDiaDoMes = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  d.setDate(Math.min(diaOriginal, ultimoDiaDoMes));
+  return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
 function esc(s){
   return (s === undefined || s === null) ? '' : String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }

@@ -87,6 +87,60 @@ function orcamentoVinculado(f){
   if(!f || !f.orcamentoId) return null;
   return orcamentosAtivos().find(x => x.id === f.orcamentoId) || null;
 }
+
+/* =========================================================
+   PARCELAMENTO AUTOMÁTICO
+   Uma compra/venda parcelada é cadastrada uma única vez no formulário —
+   o painel cria sozinho um lançamento pendente pra cada parcela, já com
+   a data de vencimento certa, sem precisar repetir o cadastro N vezes.
+   ========================================================= */
+// Divide um valor total em N parcelas em centavos, sem perder (nem sobrar) centavo por
+// causa de arredondamento — o resto de centavos é distribuído nas primeiras parcelas.
+function dividirValorEmParcelas(total, n){
+  const centavosTotal = Math.round((total || 0) * 100);
+  const base = Math.floor(centavosTotal / n);
+  const resto = centavosTotal - (base * n);
+  const valores = [];
+  for(let i = 0; i < n; i++){
+    valores.push((base + (i < resto ? 1 : 0)) / 100);
+  }
+  return valores;
+}
+// Data de vencimento da parcela de índice "indice" (0 = a primeira, que usa a própria
+// data base informada no formulário), conforme o intervalo escolhido.
+function calcularVencimentoParcela(dataBase, indice, intervalo){
+  if(indice === 0) return fmtDataExibir(dataBase);
+  if(intervalo === 'quinzenal') return somarDias(dataBase, indice * 15);
+  if(intervalo === 'semanal') return somarDias(dataBase, indice * 7);
+  return somarMeses(dataBase, indice);
+}
+// Mostra/esconde os campos de nº de parcelas e intervalo, e ajusta os rótulos de
+// Valor/Vencimento pra deixar claro que passam a ser "total" e "1ª parcela".
+function alternarParcelamento(){
+  const ligado = document.getElementById('ffParcelado').checked;
+  document.getElementById('ffParceladoCampos').classList.toggle('hidden', !ligado);
+  document.getElementById('ffValorLabel').textContent = ligado ? 'Valor total (R$) *' : 'Valor (R$) *';
+  document.getElementById('ffVencimentoLabel').textContent = ligado ? 'Vencimento da 1ª parcela' : 'Vencimento';
+  atualizarPreviewParcelas();
+}
+// Atualiza a prévia "Nx de R$ ..." conforme a pessoa preenche valor/vencimento/parcelas.
+function atualizarPreviewParcelas(){
+  const previewEl = document.getElementById('ffParcelaPreview');
+  if(!previewEl) return;
+  if(!document.getElementById('ffParcelado').checked) return;
+  const n = parseInt(document.getElementById('ffParcelas').value, 10);
+  const total = parseMoeda(document.getElementById('ffValor').value);
+  const vencimentoBase = document.getElementById('ffVencimento').value.trim();
+  if(!n || n < 2 || !total || !paraDataObj(vencimentoBase)){
+    previewEl.textContent = 'Preencha valor total, vencimento da 1ª parcela e nº de parcelas.';
+    return;
+  }
+  const intervalo = document.getElementById('ffIntervaloParcela').value;
+  const valores = dividirValorEmParcelas(total, n);
+  const primeiraDataFmt = calcularVencimentoParcela(vencimentoBase, 0, intervalo);
+  const ultimaDataFmt = calcularVencimentoParcela(vencimentoBase, n - 1, intervalo);
+  previewEl.textContent = n + 'x de R$ ' + fmtMoeda(valores[0]) + (valores[0] !== valores[n-1] ? ' (algumas de R$ ' + fmtMoeda(valores[n-1]) + ')' : '') + ' — de ' + primeiraDataFmt + ' até ' + ultimaDataFmt;
+}
 function abrirFormFinanceiro(id){
   financeiroEditId = id || null;
   const f = id ? state.financeiro.find(x => x.id === id) : {};
@@ -127,6 +181,25 @@ function abrirFormFinanceiro(id){
     avisoEl.classList.add('hidden');
   }
 
+  // Parcelamento automático só é oferecido ao criar um lançamento novo — uma vez
+  // criadas, as parcelas são independentes entre si (edita/paga/exclui cada uma
+  // separadamente), então ao editar uma parcela existente só mostramos um aviso
+  // informativo de qual parcela é essa, sem a opção de reparcelar.
+  document.getElementById('ffParcelado').checked = false;
+  document.getElementById('ffParcelas').value = '';
+  document.getElementById('ffIntervaloParcela').value = 'mensal';
+  document.getElementById('ffParceladoCampos').classList.add('hidden');
+  document.getElementById('ffValorLabel').textContent = 'Valor (R$) *';
+  document.getElementById('ffVencimentoLabel').textContent = 'Vencimento';
+  document.getElementById('ffParceladoBloco').classList.toggle('hidden', !!id);
+  const infoParcelaEl = document.getElementById('ffParcelaInfoAviso');
+  if(f.parcelaTotal){
+    document.getElementById('ffParcelaInfoTexto').textContent = f.parcelaNum + ' de ' + f.parcelaTotal;
+    infoParcelaEl.classList.remove('hidden');
+  } else {
+    infoParcelaEl.classList.add('hidden');
+  }
+
   document.getElementById('formFinanceiroTitulo').textContent = id ? 'Editar conta' : 'Nova conta';
   document.getElementById('formFinanceiroWrap').classList.remove('hidden');
   document.getElementById('ffDescricao').focus();
@@ -138,11 +211,11 @@ function fecharFormFinanceiro(){
 function salvarFinanceiro(){
   const descricao = document.getElementById('ffDescricao').value.trim();
   if(!descricao){ alert('Informe a descrição.'); return; }
-  const dados = {
+  const valorInformado = parseMoeda(document.getElementById('ffValor').value);
+  const vencimentoInformado = document.getElementById('ffVencimento').value.trim();
+  const dadosBase = {
     tipo: document.getElementById('ffTipo').value,
     descricao,
-    valor: parseMoeda(document.getElementById('ffValor').value),
-    vencimento: document.getElementById('ffVencimento').value.trim(),
     categoria: document.getElementById('ffCategoria').value.trim(),
     clienteId: document.getElementById('ffCliente').value || null,
     status: document.getElementById('ffStatus').value,
@@ -151,11 +224,42 @@ function salvarFinanceiro(){
     comprovanteUrl: ffAnexos.comprovante ? ffAnexos.comprovante.url : '',
     comprovanteNome: ffAnexos.comprovante ? ffAnexos.comprovante.nome : ''
   };
-  if(financeiroEditId){
-    Object.assign(state.financeiro.find(x => x.id === financeiroEditId), dados);
+
+  // Parcelamento automático só é oferecido pra lançamentos novos (ver abrirFormFinanceiro).
+  const parcelar = !financeiroEditId && document.getElementById('ffParcelado').checked;
+  if(parcelar){
+    const n = parseInt(document.getElementById('ffParcelas').value, 10);
+    if(!n || n < 2){ alert('Informe o número de parcelas (mínimo 2).'); return; }
+    if(!paraDataObj(vencimentoInformado)){ alert('Informe a data de vencimento da 1ª parcela.'); return; }
+    if(!valorInformado){ alert('Informe o valor total a parcelar.'); return; }
+    const intervalo = document.getElementById('ffIntervaloParcela').value;
+    const valores = dividirValorEmParcelas(valorInformado, n);
+    const grupoId = uid('parcelamento');
+    for(let i = 0; i < n; i++){
+      const item = Object.assign({}, dadosBase, {
+        id: uid('financeiro'),
+        valor: valores[i],
+        vencimento: calcularVencimentoParcela(vencimentoInformado, i, intervalo),
+        parcelamentoId: grupoId,
+        parcelaNum: i + 1,
+        parcelaTotal: n
+      });
+      // O anexo (boleto/comprovante) enviado no formulário vira só da 1ª parcela — as
+      // demais nascem sem anexo, pra não repetir o mesmo arquivo em todas.
+      if(i > 0){ item.boletoUrl = ''; item.boletoNome = ''; item.comprovanteUrl = ''; item.comprovanteNome = ''; }
+      state.financeiro.push(item);
+    }
   } else {
-    dados.id = uid('financeiro');
-    state.financeiro.push(dados);
+    const dados = Object.assign({}, dadosBase, {
+      valor: valorInformado,
+      vencimento: vencimentoInformado
+    });
+    if(financeiroEditId){
+      Object.assign(state.financeiro.find(x => x.id === financeiroEditId), dados);
+    } else {
+      dados.id = uid('financeiro');
+      state.financeiro.push(dados);
+    }
   }
   marcarAlterado();
   fecharFormFinanceiro();
@@ -207,9 +311,12 @@ function renderFinanceiro(){
       ? ' <span class="badge desencontrado" title="O orçamento vinculado mudou depois desse pagamento já confirmado (valor ou cliente diferente do que foi cobrado) — confira e ajuste manualmente.">⚠ orçamento mudou</span>'
       : '';
     const anexos = `${f.boletoUrl ? `<a href="${esc(f.boletoUrl)}" target="_blank" rel="noopener" title="Abrir boleto${f.boletoNome ? ': ' + esc(f.boletoNome) : ''}">📄</a>` : ''}${f.comprovanteUrl ? `<a href="${esc(f.comprovanteUrl)}" target="_blank" rel="noopener" title="Abrir comprovante${f.comprovanteNome ? ': ' + esc(f.comprovanteNome) : ''}">🧾</a>` : ''}`;
+    const parcelaBadge = f.parcelaTotal
+      ? ` <span class="badge parcela" title="Parcela ${f.parcelaNum} de ${f.parcelaTotal} desta compra/venda">${f.parcelaNum}/${f.parcelaTotal}</span>`
+      : '';
     tr.innerHTML = `
       <td><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'A pagar' : 'A receber'}</span></td>
-      <td>${esc(f.descricao)}</td>
+      <td>${esc(f.descricao)}${parcelaBadge}</td>
       <td>${esc(f.categoria)}</td>
       <td>${esc(nomeClienteOpcional(f.clienteId))}</td>
       <td>${fmtDataExibir(f.vencimento)}</td>

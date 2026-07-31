@@ -43,6 +43,7 @@ function exportarFinanceiroExcel(){
       'Cliente': nomeClienteOpcional(f.clienteId),
       'Vencimento': f.vencimento ? fmtDataExibir(f.vencimento) : '',
       'Valor (R$)': f.valor || 0,
+      'Parcela': f.parcelaTotal ? (f.parcelaNum + '/' + f.parcelaTotal) : '',
       'Status': f.status === 'pago' ? 'Pago/Recebido' : 'Pendente',
       'Boleto (link)': f.boletoUrl || '',
       'Comprovante (link)': f.comprovanteUrl || ''

@@ -82,6 +82,11 @@ function processarAnexoFinanceiro(input, tipo){
   reader.readAsDataURL(file);
 }
 
+// Orçamento ainda ativo (não excluído) vinculado a um lançamento financeiro, se houver.
+function orcamentoVinculado(f){
+  if(!f || !f.orcamentoId) return null;
+  return orcamentosAtivos().find(x => x.id === f.orcamentoId) || null;
+}
 function abrirFormFinanceiro(id){
   financeiroEditId = id || null;
   const f = id ? state.financeiro.find(x => x.id === id) : {};
@@ -99,6 +104,29 @@ function abrirFormFinanceiro(id){
   ffAnexos.comprovante = f.comprovanteUrl ? { url: f.comprovanteUrl, nome: f.comprovanteNome || 'comprovante' } : null;
   atualizarPreviewAnexo('boleto');
   atualizarPreviewAnexo('comprovante');
+
+  // Cliente e valor de um lançamento vinculado a um orçamento são controlados pelo
+  // orçamento (pra nunca ficarem desencontrados) — edite lá se precisar mudar.
+  const o = orcamentoVinculado(f);
+  const avisoEl = document.getElementById('ffVinculoAviso');
+  const linkEl = document.getElementById('ffVinculoLink');
+  document.getElementById('ffCliente').disabled = !!o;
+  document.getElementById('ffValor').readOnly = !!o;
+  document.getElementById('ffValor').classList.toggle('campo-travado', !!o);
+  document.getElementById('ffCliente').classList.toggle('campo-travado', !!o);
+  if(o){
+    linkEl.textContent = 'Orçamento nº ' + o.numero;
+    linkEl.onclick = function(ev){
+      ev.preventDefault();
+      fecharFormFinanceiro();
+      mostrarAba('orcamentos');
+      abrirFormOrcamento(o.id);
+    };
+    avisoEl.classList.remove('hidden');
+  } else {
+    avisoEl.classList.add('hidden');
+  }
+
   document.getElementById('formFinanceiroTitulo').textContent = id ? 'Editar conta' : 'Nova conta';
   document.getElementById('formFinanceiroWrap').classList.remove('hidden');
   document.getElementById('ffDescricao').focus();
@@ -174,6 +202,10 @@ function renderFinanceiro(){
     const statusBadge = f.status === 'pago'
       ? '<span class="badge pago">Pago/Recebido</span>'
       : (vencido ? '<span class="badge vencido">Vencido</span>' : '<span class="badge pendente">Pendente</span>');
+    const dessincronizado = financeiroDessincronizado(f);
+    const avisoDessinc = dessincronizado
+      ? ' <span class="badge desencontrado" title="O orçamento vinculado mudou depois desse pagamento já confirmado (valor ou cliente diferente do que foi cobrado) — confira e ajuste manualmente.">⚠ orçamento mudou</span>'
+      : '';
     const anexos = `${f.boletoUrl ? `<a href="${esc(f.boletoUrl)}" target="_blank" rel="noopener" title="Abrir boleto${f.boletoNome ? ': ' + esc(f.boletoNome) : ''}">📄</a>` : ''}${f.comprovanteUrl ? `<a href="${esc(f.comprovanteUrl)}" target="_blank" rel="noopener" title="Abrir comprovante${f.comprovanteNome ? ': ' + esc(f.comprovanteNome) : ''}">🧾</a>` : ''}`;
     tr.innerHTML = `
       <td><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'A pagar' : 'A receber'}</span></td>
@@ -182,7 +214,7 @@ function renderFinanceiro(){
       <td>${esc(nomeClienteOpcional(f.clienteId))}</td>
       <td>${fmtDataExibir(f.vencimento)}</td>
       <td>R$ ${fmtMoeda(f.valor)}</td>
-      <td>${statusBadge}</td>
+      <td>${statusBadge}${avisoDessinc}</td>
       <td class="anexos-cell">${anexos || '—'}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="alternarStatusFinanceiro('${f.id}')" title="Marcar como ${f.status === 'pendente' ? 'pago/recebido' : 'pendente'}">${f.status === 'pendente' ? '✓' : '↺'}</button>
@@ -193,6 +225,28 @@ function renderFinanceiro(){
     tbody.appendChild(tr);
   });
   renderCardsFinanceiro();
+}
+// Mantém o lançamento financeiro (a "venda") em sincronia com o orçamento que o gerou —
+// chamado sempre que o orçamento é salvo (ver salvarOrcamento em 08-orcamentos-modelos.js).
+// Só atualiza sozinho enquanto o lançamento ainda está "pendente": depois que o
+// pagamento foi confirmado, não sobrescreve mais um registro já reconciliado — nesse
+// caso, se o orçamento mudar, o lançamento fica marcado como desencontrado (ver
+// financeiroDessincronizado) pra revisão manual em vez de mudar sozinho por baixo dos panos.
+function sincronizarFinanceiroComOrcamento(o){
+  if(!o.financeiroGerado) return;
+  const f = state.financeiro.find(x => x.orcamentoId === o.id && !x.excluidoEm);
+  if(!f || f.status === 'pago') return;
+  f.valor = o.total;
+  f.clienteId = o.clienteId;
+}
+// true quando um lançamento "a receber" vinculado a um orçamento já foi pago, mas o
+// orçamento mudou depois (valor ou cliente diferente do que foi cobrado) — como pagamentos
+// confirmados não são sobrescritos automaticamente, isso pede uma checada manual.
+function financeiroDessincronizado(f){
+  if(!f.orcamentoId || f.status !== 'pago') return false;
+  const o = state.orcamentos.find(x => x.id === f.orcamentoId);
+  if(!o || o.excluidoEm) return false;
+  return f.valor !== o.total || f.clienteId !== o.clienteId;
 }
 function nomeClienteOpcional(clienteId){
   if(!clienteId) return '';

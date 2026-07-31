@@ -256,10 +256,12 @@ function salvarOrcamento(){
     orc = dados;
   }
   confirmarVendaSeNecessario(orc);
+  sincronizarFinanceiroComOrcamento(orc);
   marcarAlterado();
   fecharFormOrcamento();
   renderOrcamentos();
   renderProdutos();
+  renderFinanceiro();
   document.getElementById('proximoNumeroLabel').textContent = String(state.proximoNumero).padStart(4,'0');
 }
 // Considera a venda "confirmada" quando o orçamento está Aprovado ou Concluído (mesmo

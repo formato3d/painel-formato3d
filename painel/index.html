@@ -139,6 +139,7 @@
   .top-actions button.primary{ background:var(--navy); color:#fff; }
   .top-actions button:hover{ opacity:0.88; }
   #btnTema{ font-size:15px; padding:6px 10px; line-height:1; }
+  #btnAtualizarDados{ font-size:15px; padding:6px 10px; line-height:1; }
   #statusSalvo{ font-size:11.5px; color:var(--gray); white-space:nowrap; }
   #statusSalvo.dirty{ color:var(--red); font-weight:bold; }
   #statusSalvo.autosave{ color:var(--green); font-weight:bold; }
@@ -666,6 +667,7 @@
   </nav>
   <div class="top-actions">
     <span id="statusSalvo">carregando...</span>
+    <button id="btnAtualizarDados" onclick="atualizarAgora()" title="Buscar dados atualizados agora">🔄</button>
     <button id="btnTema" onclick="alternarTema()" title="Alternar tema claro/escuro">🌙</button>
     <button id="btnUsuarios" class="btn secondary" onclick="abrirUsuarios()" title="Gerenciar usuários com acesso ao painel">👤 Usuários</button>
     <button id="btnSair" class="btn secondary" onclick="sair()" title="Sair da área restrita">Sair</button>

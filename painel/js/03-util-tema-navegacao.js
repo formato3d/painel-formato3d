@@ -57,6 +57,66 @@ function proximoCodigoProduto(){
 }
 
 /* =========================================================
+   VALOR POR EXTENSO (usado no recibo)
+   ========================================================= */
+function valorPorExtenso(valor){
+  const UNIDADES = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
+  const DEZ_A_DEZENOVE = ['dez','onze','doze','treze','quatorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+  const DEZENAS = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+  const CENTENAS = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+
+  function ateNoveNoveNove(n){
+    if(n === 0) return '';
+    if(n === 100) return 'cem';
+    const partes = [];
+    const c = Math.floor(n/100), resto = n % 100;
+    if(c) partes.push(CENTENAS[c]);
+    if(resto >= 10 && resto < 20){
+      partes.push(DEZ_A_DEZENOVE[resto-10]);
+    } else if(resto > 0){
+      const d = Math.floor(resto/10), u = resto % 10;
+      const pd = [];
+      if(d) pd.push(DEZENAS[d]);
+      if(u) pd.push(UNIDADES[u]);
+      partes.push(pd.join(' e '));
+    }
+    return partes.join(' e ');
+  }
+  function nomePlural(n, singular, plural){ return n === 1 ? singular : plural; }
+  function inteiroPorExtenso(n){
+    if(n === 0) return 'zero';
+    const bilhoes = Math.floor(n / 1000000000);
+    const milhoes = Math.floor((n % 1000000000) / 1000000);
+    const milhares = Math.floor((n % 1000000) / 1000);
+    const centenas = n % 1000;
+    const grupos = [];
+    if(bilhoes) grupos.push(ateNoveNoveNove(bilhoes) + ' ' + nomePlural(bilhoes, 'bilhão', 'bilhões'));
+    if(milhoes) grupos.push(ateNoveNoveNove(milhoes) + ' ' + nomePlural(milhoes, 'milhão', 'milhões'));
+    if(milhares) grupos.push(milhares === 1 ? 'mil' : ateNoveNoveNove(milhares) + ' mil');
+    if(centenas) grupos.push(ateNoveNoveNove(centenas));
+    if(grupos.length === 1) return grupos[0];
+    // Regra tradicional: usa "e" antes do último grupo quando ele é < 100 (ou é uma centena "redonda"); senão usa vírgula.
+    const usaE = centenas > 0 && (centenas < 100 || centenas % 100 === 0);
+    if(usaE) return grupos.slice(0, -1).join(', ') + ' e ' + grupos[grupos.length - 1];
+    return grupos.join(', ');
+  }
+
+  valor = Math.round((Number(valor) || 0) * 100) / 100;
+  const negativo = valor < 0;
+  valor = Math.abs(valor);
+  const reais = Math.floor(valor);
+  const centavos = Math.round((valor - reais) * 100);
+  let texto = '';
+  if(reais > 0 || centavos === 0) texto += inteiroPorExtenso(reais) + ' ' + nomePlural(reais, 'real', 'reais');
+  if(centavos > 0){
+    if(reais > 0) texto += ' e ';
+    texto += inteiroPorExtenso(centavos) + ' ' + nomePlural(centavos, 'centavo', 'centavos');
+  }
+  texto = texto.charAt(0).toUpperCase() + texto.slice(1);
+  return negativo ? 'Menos ' + texto.charAt(0).toLowerCase() + texto.slice(1) : texto;
+}
+
+/* =========================================================
    TEMA (claro / escuro)
    ========================================================= */
 function aplicarTema(tema){

@@ -242,19 +242,37 @@ function salvarOrcamento(){
     total
   };
 
+  let orc;
   if(orcamentoEditId){
-    Object.assign(state.orcamentos.find(x => x.id === orcamentoEditId), dados);
+    orc = state.orcamentos.find(x => x.id === orcamentoEditId);
+    Object.assign(orc, dados);
   } else {
     dados.id = uid('orcamento');
     dados.numero = String(state.proximoNumero).padStart(4,'0');
     dados.financeiroGerado = false;
+    dados.estoqueBaixado = false;
     state.proximoNumero++;
     state.orcamentos.push(dados);
+    orc = dados;
   }
+  confirmarVendaSeNecessario(orc);
   marcarAlterado();
   fecharFormOrcamento();
   renderOrcamentos();
+  renderProdutos();
   document.getElementById('proximoNumeroLabel').textContent = String(state.proximoNumero).padStart(4,'0');
+}
+// Considera a venda "confirmada" quando o orçamento está Aprovado ou Concluído (mesmo
+// critério já usado nos relatórios e no cálculo de lucro do mês). Na primeira vez que
+// isso acontece, dá baixa no estoque dos produtos vinculados aos itens — a flag
+// "estoqueBaixado" evita descontar de novo se o orçamento for salvo outras vezes
+// (ex.: editar uma observação depois de já Aprovado).
+function confirmarVendaSeNecessario(o){
+  if(o.estoqueBaixado) return;
+  if(o.status === 'Aprovado' || o.status === 'Concluído'){
+    baixarEstoqueOrcamento(o);
+    o.estoqueBaixado = true;
+  }
 }
 function excluirOrcamento(id){
   if(!confirm('Excluir este orçamento?\n\nVai pra Lixeira — dá pra restaurar por 30 dias.')) return;
@@ -308,9 +326,13 @@ function gerarContaReceber(orcId){
     status: 'pendente'
   });
   o.financeiroGerado = true;
+  const jaTinhaBaixado = o.estoqueBaixado;
+  confirmarVendaSeNecessario(o);
   marcarAlterado();
   renderOrcamentos();
   renderFinanceiro();
-  alert('Conta a receber gerada no Financeiro para o orçamento nº ' + o.numero + '.');
+  renderProdutos();
+  const avisoEstoque = (!jaTinhaBaixado && o.estoqueBaixado) ? '\n\nBaixa de estoque feita automaticamente para os produtos desse orçamento.' : '';
+  alert('Conta a receber gerada no Financeiro para o orçamento nº ' + o.numero + '.' + avisoEstoque);
 }
 

@@ -169,6 +169,9 @@ function imprimirOrcamento(id){
   document.getElementById('poObs').textContent = o.obs || '';
   renderizarPixOrcamento(o);
 
+  document.getElementById('printArea').classList.add('ativo');
+  const areaRecibo = document.getElementById('printAreaRecibo');
+  if(areaRecibo) areaRecibo.classList.remove('ativo');
   document.body.classList.add('modo-impressao');
   window.print();
 }

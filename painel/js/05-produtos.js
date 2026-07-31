@@ -123,6 +123,23 @@ function excluirProduto(id){
   marcarAlterado();
   renderProdutos();
 }
+// Dá baixa no estoque dos produtos de um orçamento (chamado quando a venda é confirmada —
+// ver confirmarVendaSeNecessario em 08-orcamentos-modelos.js). Só mexe em produtos que
+// têm controle de quantidade ativado (campo "quantidade" preenchido); itens digitados
+// manualmente (sem produtoId) ou produtos sem controle de estoque são ignorados.
+// Retorna quantos produtos tiveram a quantidade alterada.
+function baixarEstoqueOrcamento(o){
+  let alterados = 0;
+  (o.itens || []).forEach(it => {
+    if(!it.produtoId) return;
+    const p = state.produtos.find(x => x.id === it.produtoId);
+    if(!p) return;
+    if(p.quantidade === undefined || p.quantidade === '') return;
+    p.quantidade = Number(p.quantidade) - (it.qtd || 0);
+    alterados++;
+  });
+  return alterados;
+}
 function renderProdutos(){
   const busca = (document.getElementById('buscaProduto').value || '').toLowerCase();
   const tbody = document.getElementById('corpoTabelaProdutos');

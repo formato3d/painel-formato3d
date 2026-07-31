@@ -143,9 +143,14 @@ function excluirFinanceiro(id){
 function alternarStatusFinanceiro(id){
   const f = state.financeiro.find(x => x.id === id);
   if(!f) return;
-  f.status = f.status === 'pendente' ? 'pago' : 'pendente';
+  const vaiParaPago = f.status !== 'pago';
+  f.status = vaiParaPago ? 'pago' : 'pendente';
   marcarAlterado();
   renderFinanceiro();
+  // Pagamento de uma venda (conta a receber) confirmado agora — oferece gerar o recibo na hora.
+  if(vaiParaPago && f.tipo === 'receber'){
+    if(confirm('Pagamento confirmado!\n\nDeseja gerar o recibo agora?')) abrirRecibo(f.id);
+  }
 }
 function estaVencido(f){
   if(f.status !== 'pendente' || !f.vencimento) return false;
@@ -181,6 +186,7 @@ function renderFinanceiro(){
       <td class="anexos-cell">${anexos || '—'}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="alternarStatusFinanceiro('${f.id}')" title="Marcar como ${f.status === 'pendente' ? 'pago/recebido' : 'pendente'}">${f.status === 'pendente' ? '✓' : '↺'}</button>
+        ${(f.tipo === 'receber' && f.status === 'pago') ? `<button class="btn-icon" onclick="abrirRecibo('${f.id}')" title="Gerar/imprimir recibo">🧾</button>` : ''}
         <button class="btn-icon" onclick="abrirFormFinanceiro('${f.id}')" title="Editar">✎</button>
         <button class="btn-icon danger" onclick="excluirFinanceiro('${f.id}')" title="Excluir">✕</button>
       </td>`;
@@ -208,6 +214,44 @@ function lucroDoMes(){
     .filter(o => (o.status === 'Aprovado' || o.status === 'Concluído'))
     .filter(o => { const d = paraDataObj(o.data); return d && d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear(); })
     .reduce((s,o) => s + lucroOrcamento(o), 0);
+}
+/* =========================================================
+   RECIBO (impressão/PDF de um pagamento recebido)
+   ========================================================= */
+function proximoNumeroRecibo(){
+  if(!state.seq.recibo) state.seq.recibo = 1;
+  const n = state.seq.recibo;
+  state.seq.recibo = n + 1;
+  return String(n).padStart(4,'0');
+}
+function abrirRecibo(id){
+  const f = state.financeiro.find(x => x.id === id);
+  if(!f) return;
+  if(!f.reciboNumero){
+    f.reciboNumero = proximoNumeroRecibo();
+    marcarAlterado();
+  }
+  const o = f.orcamentoId ? state.orcamentos.find(x => x.id === f.orcamentoId) : null;
+
+  document.getElementById('reLogoImg').src = document.getElementById('poLogoImg').src;
+  document.getElementById('reCnpj').textContent = state.empresa.cnpj || '';
+  document.getElementById('reWhatsapp').textContent = state.empresa.whatsapp || '';
+  document.getElementById('reNumero').textContent = f.reciboNumero;
+  document.getElementById('reData').textContent = hojeStr();
+  document.getElementById('reValorNum').textContent = 'R$ ' + fmtMoeda(f.valor);
+  document.getElementById('reValorExtenso').textContent = valorPorExtenso(f.valor);
+  const pagoPor = nomeClienteOpcional(f.clienteId) || 'Cliente';
+  document.getElementById('rePagoPor').textContent = pagoPor;
+  document.getElementById('reFormaPagamento').textContent = (o && o.formasPagamento && o.formasPagamento.length) ? o.formasPagamento.join(', ') : '—';
+  document.getElementById('reReferente').textContent = f.descricao || '';
+  document.getElementById('reTexto').textContent = 'Recebi de ' + pagoPor + ' a importância de R$ ' + fmtMoeda(f.valor) + ' (' + valorPorExtenso(f.valor).toLowerCase() + '), referente a ' + (f.descricao || 'pagamento') + '. Para clareza firmo o presente recibo.';
+  document.getElementById('reResponsavel').textContent = state.empresa.responsavel || state.empresa.nome;
+  document.getElementById('reAssinaturaDoc').textContent = state.empresa.nome + ' · CNPJ ' + (state.empresa.cnpj || '');
+
+  document.getElementById('printAreaRecibo').classList.add('ativo');
+  document.getElementById('printArea').classList.remove('ativo');
+  document.body.classList.add('modo-impressao');
+  window.print();
 }
 function renderCardsFinanceiro(){
   const receberPendente = financeiroAtivos().filter(f => f.tipo === 'receber' && f.status === 'pendente').reduce((s,f) => s + f.valor, 0);

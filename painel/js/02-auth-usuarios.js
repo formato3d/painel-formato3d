@@ -44,9 +44,16 @@ function entrarNoApp(){
   carregarDoServidor();
 }
 
-function voltarParaLogin(mensagem){
+// limparCacheLocal só é passado como true num "Sair" explícito (ver sair() abaixo) —
+// numa sessão expirada a pessoa continua "logada" na cabeça dela, então mantemos o
+// cache pra o próximo login já entrar com os dados na tela; num "Sair" de propósito
+// (ex.: computador compartilhado) apagamos os dados guardados neste aparelho.
+function voltarParaLogin(mensagem, limparCacheLocal){
   localStorage.removeItem('sessaoToken');
   localStorage.removeItem('sessaoUsuario');
+  if(limparCacheLocal){
+    try { localStorage.removeItem(CHAVE_CACHE_LOCAL); } catch(e){}
+  }
   document.body.classList.remove('autenticado');
   state = estadoPadrao();
   carregando = true;
@@ -70,7 +77,7 @@ function sair(){
       body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), action: 'logout' })
     }).catch(() => {});
   }
-  voltarParaLogin();
+  voltarParaLogin(null, true);
 }
 
 /* =========================================================

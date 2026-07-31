@@ -148,6 +148,46 @@ function marcarSalvo(){
   el.classList.remove('dirty');
 }
 
+/* =========================================================
+   CACHE LOCAL (localStorage)
+   Guarda uma cópia dos dados no próprio navegador pra, da próxima vez que a
+   pessoa entrar no painel nesse aparelho, a tela já aparecer preenchida na
+   hora — sem esperar a resposta do servidor. A busca no servidor continua
+   acontecendo em segundo plano pra confirmar ou trazer o que mudou.
+   ========================================================= */
+const CHAVE_CACHE_LOCAL = 'painelCacheEstado';
+function salvarCacheLocal(){
+  try {
+    localStorage.setItem(CHAVE_CACHE_LOCAL, JSON.stringify({ quando: new Date().toISOString(), state: state }));
+  } catch(e){
+    // Sem espaço no navegador (ou modo anônimo bloqueando localStorage) — não é
+    // grave, é só uma otimização de velocidade; o painel continua funcionando
+    // normalmente buscando os dados do servidor.
+    console.warn('Não foi possível guardar o cache local dos dados:', e);
+  }
+}
+// Mostra os dados salvos localmente na hora (sem esperar rede nenhuma). Devolve
+// true se tinha cache pra mostrar. Quem chamar ainda deve buscar do servidor em
+// seguida, pra confirmar/atualizar o que veio do cache.
+function carregarCacheLocal(){
+  try {
+    const bruto = localStorage.getItem(CHAVE_CACHE_LOCAL);
+    if(!bruto) return false;
+    const cache = JSON.parse(bruto);
+    if(!cache || !cache.state) return false;
+    state = Object.assign(estadoPadrao(), cache.state);
+    carregando = false;
+    renderTudo();
+    const el = document.getElementById('statusSalvo');
+    el.textContent = 'mostrando dados salvos neste aparelho — atualizando...';
+    el.classList.remove('dirty');
+    return true;
+  } catch(e){
+    console.warn('Não foi possível ler o cache local dos dados:', e);
+    return false;
+  }
+}
+
 function configuracaoPendente(){
   return !CONFIG.URL_API || CONFIG.URL_API.indexOf('COLE_AQUI') !== -1;
 }
@@ -173,6 +213,7 @@ function salvarNoServidor(){
       if(resp.erro) throw new Error(resp.erro);
       state.revisao = resp.revisao;
       marcarSalvo();
+      salvarCacheLocal();
     })
     .catch(err => {
       const el = document.getElementById('statusSalvo');
@@ -205,6 +246,10 @@ function avisarDadosDesatualizados(){
   carregarDoServidor();
 }
 
+// Nº de falhas seguidas buscando do servidor (usado só pra calcular o tempo de
+// espera até a próxima tentativa automática) e o timer dessa tentativa.
+let tentativasCarregamento = 0;
+let timerNovaTentativaCarregamento = null;
 function carregarDoServidor(){
   if(configuracaoPendente()){
     document.getElementById('statusSalvo').textContent = 'painel não configurado — veja o guia de instalação';
@@ -212,28 +257,72 @@ function carregarDoServidor(){
     renderTudo();
     return;
   }
+  clearTimeout(timerNovaTentativaCarregamento);
   fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual()))
     .then(r => r.json())
     .then(dados => {
       if(sessaoInvalida(dados.erro)){ voltarParaLogin('Sua sessão expirou — faça login novamente.'); return; }
       if(dados.erro) throw new Error(dados.erro);
+      tentativasCarregamento = 0;
+      // Liga a verificação periódica mesmo se a gente acabar não aplicando esses
+      // dados agora (ver "dirty" abaixo) — sem isso, se a pessoa começasse a editar
+      // bem rápido logo no primeiro carregamento, o painel nunca mais buscaria
+      // atualizações sozinho.
+      iniciarVerificacaoPeriodica();
+      // Tem uma edição sendo salva agora (autosave em andamento) — não troca o que
+      // está na tela por baixo dos panos; quando esse salvamento terminar, o painel
+      // já fica em dia sozinho (ver salvarNoServidor/marcarSalvo), inclusive
+      // limpando um aviso de erro anterior que tenha ficado na tela.
+      if(dirty) return;
       // Se já tínhamos carregado antes e a revisão não mudou, ninguém salvou nada novo
       // nesse meio-tempo — evita re-renderizar as listas à toa a cada verificação
       // periódica (o que resetaria filtros/scroll sem necessidade).
-      if(!carregando && dados.revisao === state.revisao) return;
-      state = Object.assign(estadoPadrao(), dados);
-      carregando = false;
-      // Qualquer bloqueio anterior por dados desatualizados fica resolvido: acabamos
-      // de buscar a versão mais recente da planilha.
-      bloqueadoPorConflito = false;
-      renderTudo();
+      const precisaAplicar = carregando || dados.revisao !== state.revisao;
+      if(precisaAplicar){
+        state = Object.assign(estadoPadrao(), dados);
+        carregando = false;
+        // Qualquer bloqueio anterior por dados desatualizados fica resolvido: acabamos
+        // de buscar a versão mais recente da planilha.
+        bloqueadoPorConflito = false;
+        renderTudo();
+        salvarCacheLocal();
+      }
+      // Confirma "salvo às ..." mesmo quando não havia nada novo pra aplicar — é o que
+      // limpa um aviso de "não foi possível atualizar" que tenha ficado de uma
+      // tentativa anterior (ex.: depois de clicar em 🔄 atualizar agora).
       marcarSalvo();
-      iniciarVerificacaoPeriodica();
     })
     .catch(err => {
-      document.getElementById('statusSalvo').textContent = 'erro ao carregar os dados — recarregue a página';
       console.error(err);
+      const el = document.getElementById('statusSalvo');
+      // Se já tem dados na tela (vieram do cache local ou de um carregamento
+      // anterior), a pessoa continua vendo e usando esses dados normalmente — só
+      // avisa que não deu pra atualizar agora, sem travar numa tela de erro pedindo
+      // F5. O painel tenta de novo sozinho, com um tempo de espera que vai
+      // aumentando (5s, 10s, 20s... até no máximo 1min entre tentativas).
+      el.textContent = carregando
+        ? 'não foi possível carregar os dados agora — tentando de novo...'
+        : 'não foi possível atualizar agora (mostrando os últimos dados salvos) — tentando de novo...';
+      el.classList.add('dirty');
+      // Uma vez que a verificação periódica (a cada 15s) já está ligada, ela mesma
+      // cobre a próxima tentativa — não precisa de um timer próprio duplicado.
+      if(!verificacaoPeriodicaAtiva){
+        tentativasCarregamento++;
+        const espera = Math.min(60000, 5000 * Math.pow(2, tentativasCarregamento - 1));
+        timerNovaTentativaCarregamento = setTimeout(carregarDoServidor, espera);
+      }
     });
+}
+// Botão "🔄" no cabeçalho — busca os dados mais recentes na hora, sem esperar o
+// próximo ciclo automático (a cada 15s) nem o tempo de espera de uma tentativa
+// anterior que tenha falhado.
+function atualizarAgora(){
+  tentativasCarregamento = 0;
+  clearTimeout(timerNovaTentativaCarregamento);
+  const el = document.getElementById('statusSalvo');
+  el.textContent = 'atualizando...';
+  el.classList.remove('dirty');
+  carregarDoServidor();
 }
 
 // Enquanto o painel está aberto, outros dispositivos/abas podem estar salvando dados

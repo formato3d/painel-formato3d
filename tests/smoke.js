@@ -244,6 +244,60 @@ function assert(condicao, mensagem){
   assert(await page.evaluate(() => document.getElementById('ffCliente').disabled === false), 'conta sem orçamento vinculado continua com o campo de cliente editável');
   await page.evaluate(() => fecharFormFinanceiro());
 
+  console.log('Grupo: parcelamento automático (contas a pagar/receber)');
+  const calc = await page.evaluate(() => {
+    const valores = dividirValorEmParcelas(100, 3);
+    const datasMensal = [0,1,2].map(i => calcularVencimentoParcela('31/01/2026', i, 'mensal'));
+    return { valores, somaValores: Math.round(valores.reduce((s,v) => s+v, 0) * 100) / 100, datasMensal };
+  });
+  assert(calc.somaValores === 100, 'dividirValorEmParcelas(100,3) soma exatamente o valor total, sem sobrar/perder centavo no arredondamento');
+  assert(calc.valores[0] === 33.34 && calc.valores[1] === 33.33 && calc.valores[2] === 33.33, 'o centavo de resto do arredondamento vai pra(s) primeira(s) parcela(s) (33,34 + 33,33 + 33,33)');
+  assert(calc.datasMensal[0] === '31/01/2026' && calc.datasMensal[1] === '28/02/2026' && calc.datasMensal[2] === '31/03/2026', 'vencimento mensal trata fim de mês direito (31/01 -> 28/02, não estoura pra 03/03)');
+
+  await page.evaluate(() => abrirFormFinanceiro());
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => !document.getElementById('ffParceladoBloco').classList.contains('hidden')), 'opção de parcelar aparece ao abrir o formulário de uma conta nova');
+  assert(await page.evaluate(() => document.getElementById('ffParcelado').checked === false), 'a opção de parcelar começa desmarcada por padrão');
+  await page.evaluate(() => {
+    document.getElementById('ffTipo').value = 'pagar';
+    document.getElementById('ffDescricao').value = 'Compra parcelada CI';
+    document.getElementById('ffValor').value = '1000,00';
+    document.getElementById('ffVencimento').value = '10/08/2026';
+    document.getElementById('ffCategoria').value = 'Fornecedor';
+    document.getElementById('ffParcelado').checked = true;
+    alternarParcelamento();
+    document.getElementById('ffParcelas').value = '10';
+    atualizarPreviewParcelas();
+  });
+  assert(await page.evaluate(() => !document.getElementById('ffParceladoCampos').classList.contains('hidden')), 'campos de nº de parcelas e intervalo aparecem ao marcar "parcelar"');
+  assert(await page.evaluate(() => document.getElementById('ffParcelaPreview').textContent.includes('10x de R$ 100,00')), 'a prévia mostra o valor de cada parcela calculado a partir do total (1000 / 10 = 100,00)');
+  await page.evaluate(() => salvarFinanceiro());
+  await page.waitForTimeout(900);
+  const parcelas = await page.evaluate(() => financeiroAtivos().filter(f => f.descricao === 'Compra parcelada CI').sort((a,b) => a.parcelaNum - b.parcelaNum).map(f => ({ id:f.id, tipo:f.tipo, categoria:f.categoria, valor:f.valor, vencimento:f.vencimento, status:f.status, parcelaNum:f.parcelaNum, parcelaTotal:f.parcelaTotal, parcelamentoId:f.parcelamentoId })));
+  assert(parcelas.length === 10, 'salvar uma conta marcada como parcelada em 10x cria os 10 lançamentos sozinho (não precisa cadastrar um por um)');
+  assert(parcelas.every(p => p.tipo === 'pagar' && p.categoria === 'Fornecedor' && p.status === 'pendente'), 'todas as parcelas herdam tipo, categoria e status informados uma única vez no formulário');
+  assert(parcelas.every((p,i) => p.parcelaNum === i+1 && p.parcelaTotal === 10), 'cada parcela sabe seu número dentro do total (ex.: a 3ª de 10)');
+  assert(new Set(parcelas.map(p => p.parcelamentoId)).size === 1, 'todas as parcelas de uma mesma compra compartilham o mesmo id de parcelamento (ficam agrupadas)');
+  const somaParcelas = Math.round(parcelas.reduce((s,p) => s + p.valor, 0) * 100) / 100;
+  assert(somaParcelas === 1000, 'a soma das 10 parcelas bate exatamente com o valor total de R$ 1000,00 informado');
+  assert(parcelas[0].vencimento === '10/08/2026', 'a 1ª parcela vence na data informada no formulário');
+  assert(parcelas[1].vencimento === '10/09/2026', 'a 2ª parcela vence 1 mês depois (intervalo mensal, o padrão)');
+  assert(parcelas[9].vencimento === '10/05/2027', 'a 10ª (última) parcela vence 9 meses depois da 1ª — cada parcela já nasce na data certa, sem precisar cadastrar uma por uma');
+
+  await page.evaluate((id) => abrirFormFinanceiro(id), parcelas[2].id);
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('ffParceladoBloco').classList.contains('hidden')), 'a opção de parcelar fica escondida ao editar uma parcela já existente (evita reparcelar por engano)');
+  assert(await page.evaluate(() => !document.getElementById('ffParcelaInfoAviso').classList.contains('hidden')), 'aviso informando de qual parcela se trata aparece ao editar uma parcela');
+  assert(await page.evaluate(() => document.getElementById('ffParcelaInfoTexto').textContent === '3 de 10'), 'o aviso mostra o número certo da parcela sendo editada (3 de 10)');
+  await page.evaluate(() => fecharFormFinanceiro());
+  await page.evaluate(() => abrirFormFinanceiro());
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('ffParcelaInfoAviso').classList.contains('hidden')), 'o aviso de parcela some ao abrir o formulário pra uma conta nova (sem parcela nenhuma)');
+  await page.evaluate(() => fecharFormFinanceiro());
+
+  await page.evaluate(() => renderFinanceiro());
+  assert(await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent.includes('3/10')), 'a tabela do Financeiro mostra a etiqueta "3/10" identificando a parcela na listagem');
+
   console.log('Grupo: exportar Excel não quebra mesmo sem a lib carregada');
   const exportResult = await page.evaluate(() => {
     try { exportarFinanceiroExcel(); return 'sem erro'; } catch(e) { return 'ERRO: ' + e.message; }

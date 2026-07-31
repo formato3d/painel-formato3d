@@ -185,6 +185,65 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(150);
   assert(await page.evaluate((n) => state.financeiro.find(f => f.id === 'fin_ci1').reciboNumero === n, numeroReciboAntes), 'gerar o recibo de novo mantém o mesmo número (não gera um novo a cada impressão)');
 
+  console.log('Grupo: orçamento e financeiro (venda) ficam interligados');
+  await page.evaluate(() => {
+    state.clientes.push({id:'cli_sync_a', nome:'Cliente Sync A', telefone:'', email:'', cidade:'Manaus/AM'});
+    state.clientes.push({id:'cli_sync_b', nome:'Cliente Sync B', telefone:'', email:'', cidade:'Manaus/AM'});
+    const o = {
+      id:'orc_sync1', numero: state.proximoNumero, clienteId:'cli_sync_a', data: hojeStr(), validadeDias:'7',
+      status:'Aprovado', frete:0, desconto:0, total:100, obs:'', financeiroGerado:false, estoqueBaixado:true,
+      condicaoPagamento:'', formasPagamento:['Pix'], itens:[{ produtoId:null, cod:'', descricao:'Item sync', qtd:1, valorUnit:100, custoUnit:0 }]
+    };
+    state.orcamentos.push(o);
+    state.proximoNumero++;
+    gerarContaReceber('orc_sync1');
+  });
+  await page.waitForTimeout(900);
+  const finSyncId = await page.evaluate(() => state.financeiro.find(f => f.orcamentoId === 'orc_sync1').id);
+  assert(await page.evaluate((id) => state.financeiro.find(f => f.id === id).valor === 100, finSyncId), 'gerar a venda a partir do orçamento traz o valor certo');
+
+  // Mudou o orçamento (cliente e valor) enquanto a venda ainda está pendente — tem que refletir sozinho.
+  await page.evaluate(() => {
+    const o = state.orcamentos.find(x => x.id === 'orc_sync1');
+    o.clienteId = 'cli_sync_b';
+    o.total = 180;
+    sincronizarFinanceiroComOrcamento(o);
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  assert(await page.evaluate((id) => state.financeiro.find(f => f.id === id).valor === 180, finSyncId), 'mudar o valor do orçamento atualiza a venda pendente automaticamente');
+  assert(await page.evaluate((id) => state.financeiro.find(f => f.id === id).clienteId === 'cli_sync_b', finSyncId), 'mudar o cliente do orçamento atualiza a venda pendente automaticamente');
+
+  // Confirma o pagamento (pago) e SÓ DEPOIS o orçamento muda de novo — não pode reescrever um pagamento já confirmado.
+  await page.evaluate((id) => {
+    window.confirm = () => false; // não precisa gerar recibo nesse teste
+    alternarStatusFinanceiro(id);
+  }, finSyncId);
+  await page.waitForTimeout(900);
+  await page.evaluate(() => {
+    const o = state.orcamentos.find(x => x.id === 'orc_sync1');
+    o.total = 999;
+    sincronizarFinanceiroComOrcamento(o);
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  assert(await page.evaluate((id) => state.financeiro.find(f => f.id === id).valor === 180, finSyncId), 'venda já paga não é sobrescrita quando o orçamento muda depois');
+  assert(await page.evaluate((id) => financeiroDessincronizado(state.financeiro.find(f => f.id === id)) === true, finSyncId), 'venda paga com orçamento alterado depois fica marcada como desencontrada');
+  await page.evaluate(() => renderFinanceiro());
+  assert(await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent.includes('orçamento mudou')), 'aviso de desencontro aparece na tabela do Financeiro');
+
+  // Formulário: cliente/valor ficam travados quando a venda está vinculada a um orçamento.
+  await page.evaluate((id) => abrirFormFinanceiro(id), finSyncId);
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('ffCliente').disabled === true), 'campo de cliente fica travado no formulário quando vinculado a um orçamento');
+  assert(await page.evaluate(() => document.getElementById('ffValor').readOnly === true), 'campo de valor fica travado no formulário quando vinculado a um orçamento');
+  assert(await page.evaluate(() => !document.getElementById('ffVinculoAviso').classList.contains('hidden')), 'aviso de vínculo com o orçamento aparece no formulário');
+  await page.evaluate(() => fecharFormFinanceiro());
+  await page.evaluate(() => abrirFormFinanceiro('fin_ci1'));
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('ffCliente').disabled === false), 'conta sem orçamento vinculado continua com o campo de cliente editável');
+  await page.evaluate(() => fecharFormFinanceiro());
+
   console.log('Grupo: exportar Excel não quebra mesmo sem a lib carregada');
   const exportResult = await page.evaluate(() => {
     try { exportarFinanceiroExcel(); return 'sem erro'; } catch(e) { return 'ERRO: ' + e.message; }

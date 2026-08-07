@@ -326,6 +326,7 @@ function renderFinanceiro(){
       <td class="anexos-cell">${anexos || '—'}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="alternarStatusFinanceiro('${f.id}')" title="Marcar como ${f.status === 'pendente' ? 'pago/recebido' : 'pendente'}">${f.status === 'pendente' ? '✓' : '↺'}</button>
+        ${dessincronizado ? `<button class="btn-icon" onclick="atualizarFinanceiroComOrcamento('${f.id}')" title="Atualizar lançamento com os dados atuais do orçamento">🔄</button>` : ''}
         ${(f.tipo === 'receber' && f.status === 'pago') ? `<button class="btn-icon" onclick="abrirRecibo('${f.id}')" title="Gerar/imprimir recibo">🧾</button>` : ''}
         <button class="btn-icon" onclick="abrirFormFinanceiro('${f.id}')" title="Editar">✎</button>
         <button class="btn-icon danger" onclick="excluirFinanceiro('${f.id}')" title="Excluir">✕</button>
@@ -355,6 +356,34 @@ function financeiroDessincronizado(f){
   const o = state.orcamentos.find(x => x.id === f.orcamentoId);
   if(!o || o.excluidoEm) return false;
   return f.valor !== o.total || f.clienteId !== o.clienteId;
+}
+// Botão "🔄" que aparece junto do aviso "orçamento mudou": corrige manualmente um lançamento
+// já pago pra bater com o orçamento vinculado. Diferente de sincronizarFinanceiroComOrcamento
+// (que só roda sozinha enquanto está pendente), essa ação é sempre explícita — mostra o que
+// vai mudar e pede confirmação antes de sobrescrever um pagamento já confirmado.
+function atualizarFinanceiroComOrcamento(financeiroId){
+  const f = state.financeiro.find(x => x.id === financeiroId);
+  if(!f || !f.orcamentoId) return;
+  const o = state.orcamentos.find(x => x.id === f.orcamentoId);
+  if(!o || o.excluidoEm){
+    alert('O orçamento vinculado a este lançamento não foi encontrado — pode ter sido excluído.');
+    return;
+  }
+  const mudaValor = f.valor !== o.total;
+  const mudaCliente = f.clienteId !== o.clienteId;
+  if(!mudaValor && !mudaCliente) return;
+  const linhas = [];
+  if(mudaValor) linhas.push('Valor: R$ ' + fmtMoeda(f.valor) + ' → R$ ' + fmtMoeda(o.total));
+  if(mudaCliente) linhas.push('Cliente: ' + (nomeClienteOpcional(f.clienteId) || '(nenhum)') + ' → ' + (nomeClienteOpcional(o.clienteId) || '(nenhum)'));
+  const confirmou = confirm(
+    'Atualizar este lançamento pra bater com o orçamento nº ' + o.numero + '?\n\n' + linhas.join('\n') +
+    '\n\nEssa conta já está marcada como paga/recebida — só confirme se o valor recebido de verdade mudou.'
+  );
+  if(!confirmou) return;
+  f.valor = o.total;
+  f.clienteId = o.clienteId;
+  marcarAlterado();
+  renderFinanceiro();
 }
 function nomeClienteOpcional(clienteId){
   if(!clienteId) return '';

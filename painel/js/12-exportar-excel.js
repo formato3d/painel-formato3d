@@ -32,10 +32,7 @@ function exportarFinanceiroExcel(){
     alert('Não foi possível carregar a biblioteca de exportação. Verifique sua internet e tente de novo.');
     return;
   }
-  const filtroTipo = document.getElementById('filtroTipoFin').value;
-  const filtroStatus = document.getElementById('filtroStatusFin').value;
-  const linhas = financeiroAtivos()
-    .filter(f => (!filtroTipo || f.tipo === filtroTipo) && (!filtroStatus || f.status === filtroStatus))
+  const linhas = financeiroFiltradoAtual()
     .map(f => ({
       'Tipo': f.tipo === 'pagar' ? 'A pagar' : 'A receber',
       'Descrição': f.descricao || '',

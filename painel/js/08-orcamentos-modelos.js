@@ -363,9 +363,9 @@ function verFinanceiroDoOrcamento(orcId){
     return;
   }
   mostrarAba('financeiro');
-  document.getElementById('filtroTipoFin').value = '';
   document.getElementById('filtroStatusFin').value = '';
-  renderFinanceiro();
+  document.getElementById('filtroMesFin').value = '';
+  mostrarAbaFinanceiro(f.tipo);
   setTimeout(() => {
     const linha = document.getElementById('financeiro-linha-' + f.id);
     if(!linha) return;

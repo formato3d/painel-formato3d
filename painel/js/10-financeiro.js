@@ -145,7 +145,7 @@ function abrirFormFinanceiro(id){
   financeiroEditId = id || null;
   const f = id ? state.financeiro.find(x => x.id === id) : {};
   atualizarSelectsClientes();
-  document.getElementById('ffTipo').value = f.tipo || 'receber';
+  document.getElementById('ffTipo').value = f.tipo || abaFinanceiroAtiva;
   document.getElementById('ffDescricao').value = f.descricao || '';
   document.getElementById('ffValor').value = f.valor !== undefined ? fmtMoeda(f.valor) : '0,00';
   document.getElementById('ffVencimento').value = f.vencimento ? fmtDataExibir(f.vencimento) : hojeStr();
@@ -291,14 +291,60 @@ function estaVencido(f){
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   return d < hoje;
 }
-function renderFinanceiro(){
-  const filtroTipo = document.getElementById('filtroTipoFin').value;
+// Alterna entre as sub-abas "A pagar" / "A receber" do Financeiro — cada uma mostra só os
+// lançamentos daquele tipo, com filtro de mês/status e cards próprios. Chamada pelos botões
+// da barra de abas e também de fora (ex.: verFinanceiroDoOrcamento, pra abrir já na aba certa).
+let abaFinanceiroAtiva = 'pagar';
+function mostrarAbaFinanceiro(tipo){
+  abaFinanceiroAtiva = tipo;
+  document.getElementById('subtabFinPagar').classList.toggle('active', tipo === 'pagar');
+  document.getElementById('subtabFinReceber').classList.toggle('active', tipo === 'receber');
+  renderFinanceiro();
+}
+// "YYYY-MM" a partir do vencimento de um lançamento — chave usada pelo filtro de mês.
+function chaveMesFinanceiro(f){
+  const d = paraDataObj(f.vencimento);
+  return d ? (d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')) : null;
+}
+// Todo mês/ano que aparece em algum vencimento do financeiro (pagar + receber), pra popular
+// o filtro de período — sempre inclui o mês atual, mesmo sem nenhum lançamento nele, pra dar
+// pra escolher "este mês" mesmo numa base ainda vazia.
+function mesesDisponiveisFinanceiro(){
+  const hoje = new Date();
+  const chaves = new Set([hoje.getFullYear() + '-' + String(hoje.getMonth()+1).padStart(2,'0')]);
+  financeiroAtivos().forEach(f => { const c = chaveMesFinanceiro(f); if(c) chaves.add(c); });
+  return [...chaves].sort();
+}
+function rotuloMesFinanceiro(chave){
+  const [ano, mes] = chave.split('-').map(Number);
+  return NOMES_MES_ABREV[mes-1] + '/' + ano;
+}
+// Reconstrói as opções do filtro de mês, preservando a seleção atual se ela ainda existir.
+function preencherFiltroMesFin(){
+  const sel = document.getElementById('filtroMesFin');
+  const atual = sel.value;
+  const chaves = mesesDisponiveisFinanceiro();
+  sel.innerHTML = '<option value="">Todos os meses</option>' + chaves.map(c => `<option value="${c}">${rotuloMesFinanceiro(c)}</option>`).join('');
+  if(chaves.includes(atual)) sel.value = atual;
+}
+// Lista que respeita os filtros atuais da tela: a sub-aba ativa (pagar/receber), o mês e o
+// status escolhidos. Usada tanto pra desenhar a tabela quanto pra exportar — a planilha
+// exportada é sempre exatamente o que está na tela.
+function financeiroFiltradoAtual(){
+  const mesAno = document.getElementById('filtroMesFin').value;
   const filtroStatus = document.getElementById('filtroStatusFin').value;
+  return financeiroAtivos()
+    .filter(f => f.tipo === abaFinanceiroAtiva)
+    .filter(f => !filtroStatus || f.status === filtroStatus)
+    .filter(f => !mesAno || chaveMesFinanceiro(f) === mesAno);
+}
+function renderFinanceiro(){
+  preencherFiltroMesFin();
   const tbody = document.getElementById('corpoTabelaFinanceiro');
   tbody.innerHTML = '';
-  const lista = financeiroAtivos().filter(f => (!filtroTipo || f.tipo === filtroTipo) && (!filtroStatus || f.status === filtroStatus));
+  const lista = financeiroFiltradoAtual();
   if(lista.length === 0){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Nenhum lançamento encontrado.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Nenhum lançamento encontrado.</td></tr>';
   }
   lista.forEach(f => {
     const tr = document.createElement('tr');
@@ -316,7 +362,6 @@ function renderFinanceiro(){
       ? ` <span class="badge parcela" title="Parcela ${f.parcelaNum} de ${f.parcelaTotal} desta compra/venda">${f.parcelaNum}/${f.parcelaTotal}</span>`
       : '';
     tr.innerHTML = `
-      <td><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'A pagar' : 'A receber'}</span></td>
       <td>${esc(f.descricao)}${parcelaBadge}</td>
       <td>${esc(f.categoria)}</td>
       <td>${esc(nomeClienteOpcional(f.clienteId))}</td>
@@ -458,23 +503,34 @@ function totalFinanceiroPendente(tipo, apenasMesAtual){
     })
     .reduce((s,f) => s + f.valor, 0);
 }
+// Soma dos lançamentos pendentes de um tipo, dentro do período escolhido no filtro de mês da
+// aba Financeiro ('' = todos os meses, ou uma chave "YYYY-MM" pra um mês específico).
+function totalFinanceiroPeriodo(tipo, mesAno){
+  return financeiroAtivos()
+    .filter(f => f.tipo === tipo && f.status === 'pendente')
+    .filter(f => !mesAno || chaveMesFinanceiro(f) === mesAno)
+    .reduce((s,f) => s + f.valor, 0);
+}
+// Quantas contas vencidas (pendentes com vencimento no passado) tem de um tipo — não respeita
+// o filtro de mês, porque "vencida" é sobre estar atrasada agora, independente do período em tela.
+function vencidasPorTipo(tipo){
+  return financeiroAtivos().filter(f => f.tipo === tipo && estaVencido(f)).length;
+}
 function renderCardsFinanceiro(){
-  const hoje = new Date();
-  const receberPendente = totalFinanceiroPendente('receber', false);
-  const pagarPendente = totalFinanceiroPendente('pagar', false);
-  const saldo = receberPendente - pagarPendente;
-  const receberMes = totalFinanceiroPendente('receber', true);
-  const pagarMes = totalFinanceiroPendente('pagar', true);
-  const previsaoMes = receberMes - pagarMes;
-  const vencidos = financeiroAtivos().filter(estaVencido).length;
-  const lucro = lucroDoMes();
-  document.getElementById('cardsFinanceiro').innerHTML = `
-    <div class="card"><div class="label">Total a receber</div><div class="value green">R$ ${fmtMoeda(receberPendente)}</div><div class="sub">Todas as contas pendentes, de qualquer data</div></div>
-    <div class="card"><div class="label">Total a pagar</div><div class="value red">R$ ${fmtMoeda(pagarPendente)}</div><div class="sub">Todas as contas pendentes, de qualquer data</div></div>
-    <div class="card"><div class="label">Saldo geral</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">A receber menos a pagar, considerando tudo pendente</div></div>
-    <div class="card"><div class="label">Previsão de ${NOMES_MES_ABREV[hoje.getMonth()]}</div><div class="value ${previsaoMes >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(previsaoMes)}</div><div class="sub">Só o que vence este mês: R$ ${fmtMoeda(receberMes)} a receber − R$ ${fmtMoeda(pagarMes)} a pagar</div></div>
-    <div class="card"><div class="label">Contas vencidas</div><div class="value ${vencidos > 0 ? 'red' : ''}">${vencidos}</div></div>
-    <div class="card"><div class="label">Lucro do mês (vendas aprovadas)</div><div class="value ${lucro >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(lucro)}</div><div class="sub">Total cobrado menos custo dos itens — não é o mesmo que o saldo de caixa acima</div></div>
+  const mesAno = document.getElementById('filtroMesFin').value;
+  const rotuloPeriodo = mesAno ? rotuloMesFinanceiro(mesAno) : 'todas as datas';
+  const receber = totalFinanceiroPeriodo('receber', mesAno);
+  const pagar = totalFinanceiroPeriodo('pagar', mesAno);
+  const saldo = receber - pagar;
+  document.getElementById('cardsResumoFinanceiro').innerHTML = `
+    <div class="card"><div class="label">A receber</div><div class="value green">R$ ${fmtMoeda(receber)}</div><div class="sub">Pendente, ${esc(rotuloPeriodo)}</div></div>
+    <div class="card"><div class="label">A pagar</div><div class="value red">R$ ${fmtMoeda(pagar)}</div><div class="sub">Pendente, ${esc(rotuloPeriodo)}</div></div>
+    <div class="card"><div class="label">Saldo</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">A receber menos a pagar, ${esc(rotuloPeriodo)}</div></div>
+  `;
+  const vencidas = vencidasPorTipo(abaFinanceiroAtiva);
+  const rotuloTipo = abaFinanceiroAtiva === 'pagar' ? 'a pagar' : 'a receber';
+  document.getElementById('cardsTipoFinanceiro').innerHTML = `
+    <div class="card"><div class="label">Vencidas (${rotuloTipo})</div><div class="value ${vencidas > 0 ? 'red' : ''}">${vencidas}</div><div class="sub">Contas ${rotuloTipo} pendentes com vencimento já passado</div></div>
   `;
 }
 

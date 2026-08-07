@@ -170,7 +170,7 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(900);
   assert(await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_ci1').status === 'pago'), 'marcar conta a receber como paga funciona normalmente');
   assert(!!respostaConfirm && /recibo/i.test(respostaConfirm), 'ao confirmar pagamento de uma venda, o painel pergunta se quer gerar o recibo');
-  await page.evaluate(() => renderFinanceiro());
+  await page.evaluate(() => mostrarAbaFinanceiro('receber')); // fin_ci1 é do tipo receber — só aparece na aba certa
   assert(await page.evaluate(() => !!document.querySelector('button[onclick*="abrirRecibo(\'fin_ci1\')"]')), 'botão de gerar recibo (🧾) aparece na linha da conta paga');
   await page.evaluate(() => { abrirRecibo('fin_ci1'); });
   await page.waitForTimeout(150);
@@ -229,7 +229,7 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(900);
   assert(await page.evaluate((id) => state.financeiro.find(f => f.id === id).valor === 180, finSyncId), 'venda já paga não é sobrescrita quando o orçamento muda depois');
   assert(await page.evaluate((id) => financeiroDessincronizado(state.financeiro.find(f => f.id === id)) === true, finSyncId), 'venda paga com orçamento alterado depois fica marcada como desencontrada');
-  await page.evaluate(() => renderFinanceiro());
+  await page.evaluate(() => mostrarAbaFinanceiro('receber')); // finSyncId também é do tipo receber
   assert(await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent.includes('orçamento mudou')), 'aviso de desencontro aparece na tabela do Financeiro');
   assert(await page.evaluate((id) => document.getElementById('financeiro-linha-' + id).innerHTML.includes('atualizarFinanceiroComOrcamento'), finSyncId), 'botão de atualizar (🔄) aparece na linha do lançamento desencontrado');
 
@@ -248,7 +248,7 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(150);
   assert(await page.evaluate((id) => state.financeiro.find(f => f.id === id).valor === 999, finSyncId), 'aceitando a pergunta, o lançamento passa a usar o valor atual do orçamento');
   assert(await page.evaluate((id) => financeiroDessincronizado(state.financeiro.find(f => f.id === id)) === false, finSyncId), 'depois de atualizar, o lançamento não fica mais marcado como desencontrado');
-  await page.evaluate(() => renderFinanceiro());
+  await page.evaluate(() => mostrarAbaFinanceiro('receber'));
   assert(await page.evaluate(() => !document.getElementById('corpoTabelaFinanceiro').textContent.includes('orçamento mudou')), 'o aviso de desencontro some da tabela depois de atualizar');
   assert(await page.evaluate((id) => !document.getElementById('financeiro-linha-' + id).innerHTML.includes('atualizarFinanceiroComOrcamento'), finSyncId), 'o botão de atualizar (🔄) some depois que não tem mais desencontro');
 
@@ -367,7 +367,7 @@ function assert(condicao, mensagem){
   assert(await page.evaluate(() => document.getElementById('ffParcelaInfoAviso').classList.contains('hidden')), 'o aviso de parcela some ao abrir o formulário pra uma conta nova (sem parcela nenhuma)');
   await page.evaluate(() => fecharFormFinanceiro());
 
-  await page.evaluate(() => renderFinanceiro());
+  await page.evaluate(() => mostrarAbaFinanceiro('pagar')); // as parcelas criadas acima são do tipo pagar
   assert(await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent.includes('3/10')), 'a tabela do Financeiro mostra a etiqueta "3/10" identificando a parcela na listagem');
 
   console.log('Grupo: cards do Financeiro/Dashboard mostram a receber, a pagar, saldo e previsão do mês');
@@ -394,11 +394,44 @@ function assert(condicao, mensagem){
 
   await page.evaluate(() => mostrarAba('financeiro'));
   await page.waitForTimeout(150);
-  const cardsFinTexto = await page.evaluate(() => document.getElementById('cardsFinanceiro').textContent);
-  assert(/Total a receber/.test(cardsFinTexto), 'card "Total a receber" aparece no Financeiro');
-  assert(/Total a pagar/.test(cardsFinTexto), 'card "Total a pagar" aparece no Financeiro');
-  assert(/Saldo geral/.test(cardsFinTexto), 'card "Saldo geral" (a receber menos a pagar) aparece no Financeiro');
-  assert(/Previsão de/.test(cardsFinTexto), 'card de previsão do mês atual aparece no Financeiro');
+
+  // Aba "A pagar": tabela só mostra lançamentos tipo pagar, e o card de vencidas é específico dela.
+  await page.evaluate(() => { document.getElementById('filtroMesFin').value = ''; document.getElementById('filtroStatusFin').value = ''; mostrarAbaFinanceiro('pagar'); });
+  await page.waitForTimeout(150);
+  const cardsResumoTexto = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
+  assert(/A receber/.test(cardsResumoTexto) && /A pagar/.test(cardsResumoTexto) && /Saldo/.test(cardsResumoTexto), 'os cards do resumo (A receber, A pagar, Saldo) aparecem fixos no topo do Financeiro');
+  const tabelaPagarTexto = await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent);
+  assert(tabelaPagarTexto.includes('Pagar este mes CI'), 'a aba "A pagar" mostra os lançamentos do tipo pagar');
+  assert(!tabelaPagarTexto.includes('Receber este mes CI'), 'a aba "A pagar" não mostra lançamentos do tipo receber');
+  const cardsTipoPagarTexto = await page.evaluate(() => document.getElementById('cardsTipoFinanceiro').textContent);
+  assert(/Vencidas \(a pagar\)/.test(cardsTipoPagarTexto), 'o card de vencidas na aba "A pagar" é específico desse tipo');
+
+  // Aba "A receber": o inverso — e ela é quem eu uso pra testar o filtro de mês, porque as
+  // duas contas de receber deste teste vencem em meses relativos a "hoje" (não datas fixas).
+  await page.evaluate(() => mostrarAbaFinanceiro('receber'));
+  await page.waitForTimeout(150);
+  const tabelaReceberTexto = await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent);
+  assert(tabelaReceberTexto.includes('Receber este mes CI') && tabelaReceberTexto.includes('Receber mes que vem CI'), 'a aba "A receber" mostra os lançamentos do tipo receber, de todos os meses (filtro em "Todos os meses")');
+  assert(!tabelaReceberTexto.includes('Pagar este mes CI'), 'a aba "A receber" não mostra lançamentos do tipo pagar');
+  const cardsTipoReceberTexto = await page.evaluate(() => document.getElementById('cardsTipoFinanceiro').textContent);
+  assert(/Vencidas \(a receber\)/.test(cardsTipoReceberTexto), 'o card de vencidas na aba "A receber" é específico desse tipo');
+  const cardReceberTudoTexto = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
+  assert(/1\.500,00/.test(cardReceberTudoTexto), 'com "Todos os meses", o card "A receber" soma as duas contas (500 + 1000 = 1.500)');
+
+  // Filtro de mês: escolher o mês atual esconde, tanto no card quanto na tabela, a conta que
+  // só vence no mês que vem — cards e tabela mudam juntos com o mesmo filtro.
+  const chaveMesAtual = await page.evaluate(() => { const h = new Date(); return h.getFullYear() + '-' + String(h.getMonth()+1).padStart(2,'0'); });
+  await page.evaluate((chave) => { document.getElementById('filtroMesFin').value = chave; renderFinanceiro(); }, chaveMesAtual);
+  await page.waitForTimeout(150);
+  const tabelaMesAtualTexto = await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent);
+  assert(tabelaMesAtualTexto.includes('Receber este mes CI') && !tabelaMesAtualTexto.includes('Receber mes que vem CI'), 'escolhendo o mês atual no filtro, a tabela esconde a conta que só vence no mês que vem');
+  const cardReceberMesTexto = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
+  assert(/500,00/.test(cardReceberMesTexto) && !/1\.500,00/.test(cardReceberMesTexto), 'no mês atual, o card "A receber" soma só R$ 500 (não os R$ 1.500 de todos os meses)');
+
+  await page.evaluate(() => { document.getElementById('filtroMesFin').value = ''; renderFinanceiro(); });
+  await page.waitForTimeout(150);
+  const tabelaVoltaTodosMesesTexto = await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent);
+  assert(tabelaVoltaTodosMesesTexto.includes('Receber mes que vem CI'), 'voltando pra "Todos os meses", a conta do mês que vem aparece de novo na tabela');
 
   await page.evaluate(() => mostrarAba('dashboard'));
   await page.waitForTimeout(150);

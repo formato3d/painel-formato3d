@@ -244,6 +244,58 @@ function assert(condicao, mensagem){
   assert(await page.evaluate(() => document.getElementById('ffCliente').disabled === false), 'conta sem orçamento vinculado continua com o campo de cliente editável');
   await page.evaluate(() => fecharFormFinanceiro());
 
+  console.log('Grupo: botão "Ver no financeiro" no orçamento (gerar, ver, e regenerar se o lançamento sumir)');
+  await page.evaluate(() => {
+    state.clientes.push({id:'cli_verfin', nome:'Cliente VerFin CI', telefone:'', email:'', cidade:'Manaus/AM'});
+    const o = {
+      id:'orc_verfin1', numero: state.proximoNumero, clienteId:'cli_verfin', data: hojeStr(), validadeDias:'7',
+      status:'Aprovado', frete:0, desconto:0, total:250, obs:'', financeiroGerado:false, estoqueBaixado:true,
+      condicaoPagamento:'', formasPagamento:['Pix'], itens:[{ produtoId:null, cod:'', descricao:'Item verfin', qtd:1, valorUnit:250, custoUnit:0 }]
+    };
+    state.orcamentos.push(o);
+    state.proximoNumero++;
+    mostrarAba('orcamentos');
+    renderOrcamentos();
+  });
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('corpoTabelaOrcamentos').innerHTML.includes("gerarContaReceber('orc_verfin1')")), 'orçamento recém-aprovado (ainda sem financeiro) mostra o botão de gerar conta a receber');
+
+  await page.evaluate(() => { gerarContaReceber('orc_verfin1'); renderOrcamentos(); });
+  await page.waitForTimeout(150);
+  const finVerId = await page.evaluate(() => state.financeiro.find(f => f.orcamentoId === 'orc_verfin1' && !f.excluidoEm).id);
+  assert(await page.evaluate(() => document.getElementById('corpoTabelaOrcamentos').innerHTML.includes("verFinanceiroDoOrcamento('orc_verfin1')")), 'depois de gerar, o botão do orçamento vira "Ver no financeiro"');
+  assert(await page.evaluate(() => !document.getElementById('corpoTabelaOrcamentos').innerHTML.includes("gerarContaReceber('orc_verfin1')")), 'o botão de gerar conta a receber some depois que já foi gerado (não pode gerar duas vezes)');
+
+  await page.evaluate(() => verFinanceiroDoOrcamento('orc_verfin1'));
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('navtab-financeiro').classList.contains('active')), 'clicar em "Ver no financeiro" leva pra aba Financeiro');
+  assert(await page.evaluate((id) => document.getElementById('financeiro-linha-' + id).classList.contains('linha-em-foco'), finVerId), 'o lançamento vinculado fica destacado na tabela do Financeiro');
+
+  // Exclui o lançamento direto no Financeiro (simula a pessoa apagando por lá) e tenta ver de novo.
+  await page.evaluate((id) => { window.confirm = () => true; excluirFinanceiro(id); }, finVerId);
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => financeiroVinculadoAoOrcamento('orc_verfin1') === null), 'depois de excluído no Financeiro, o orçamento não encontra mais o lançamento vinculado');
+
+  await page.evaluate(() => {
+    mostrarAba('orcamentos');
+    window.__confirmMsgVerFin = null;
+    window.confirm = (msg) => { window.__confirmMsgVerFin = msg; return true; }; // aceita gerar de novo
+    verFinanceiroDoOrcamento('orc_verfin1');
+  });
+  await page.waitForTimeout(150);
+  const respostaConfirmVerFin = await page.evaluate(() => window.__confirmMsgVerFin);
+  assert(!!respostaConfirmVerFin && /gerar novamente/i.test(respostaConfirmVerFin), 'quando o lançamento vinculado não existe mais, o painel pergunta se quer gerar novamente');
+  assert(await page.evaluate(() => financeiroVinculadoAoOrcamento('orc_verfin1') !== null), 'aceitando a pergunta, um novo lançamento é gerado e vinculado ao mesmo orçamento');
+  assert(await page.evaluate(() => state.orcamentos.find(o => o.id === 'orc_verfin1').financeiroGerado === true), 'o orçamento volta a ficar marcado como "financeiro gerado" depois de regenerar');
+
+  // Exclui de novo e, dessa vez, recusa a regeneração.
+  const finVerId2 = await page.evaluate(() => financeiroVinculadoAoOrcamento('orc_verfin1').id);
+  await page.evaluate((id) => { window.confirm = () => true; excluirFinanceiro(id); }, finVerId2);
+  await page.waitForTimeout(150);
+  await page.evaluate(() => { window.confirm = () => false; verFinanceiroDoOrcamento('orc_verfin1'); });
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => financeiroVinculadoAoOrcamento('orc_verfin1') === null), 'recusando a pergunta, nenhum lançamento novo é gerado');
+
   console.log('Grupo: parcelamento automático (contas a pagar/receber)');
   const calc = await page.evaluate(() => {
     const valores = dividirValorEmParcelas(100, 3);
@@ -297,6 +349,71 @@ function assert(condicao, mensagem){
 
   await page.evaluate(() => renderFinanceiro());
   assert(await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent.includes('3/10')), 'a tabela do Financeiro mostra a etiqueta "3/10" identificando a parcela na listagem');
+
+  console.log('Grupo: cards do Financeiro/Dashboard mostram a receber, a pagar, saldo e previsão do mês');
+  await page.evaluate(() => {
+    const clienteId = state.clientes[0].id;
+    // Uma conta a receber vencendo neste mês (pendente) e outra só no mês que vem.
+    state.financeiro.push({id:'fin_mes_receber', tipo:'receber', descricao:'Receber este mes CI', valor:500, vencimento:hojeStr(), categoria:'', clienteId, status:'pendente'});
+    state.financeiro.push({id:'fin_prox_receber', tipo:'receber', descricao:'Receber mes que vem CI', valor:1000, vencimento:somarMeses(hojeStr(), 1), categoria:'', clienteId, status:'pendente'});
+    // Uma conta a pagar vencendo neste mês (pendente) e outra já paga (não deve contar em nada).
+    state.financeiro.push({id:'fin_mes_pagar', tipo:'pagar', descricao:'Pagar este mes CI', valor:200, vencimento:hojeStr(), categoria:'', clienteId:null, status:'pendente'});
+    state.financeiro.push({id:'fin_pago_ignorar', tipo:'pagar', descricao:'Ja pago CI', valor:9999, vencimento:hojeStr(), categoria:'', clienteId:null, status:'pago'});
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+
+  const totais = await page.evaluate(() => ({
+    receberTudo: totalFinanceiroPendente('receber', false),
+    receberMes: totalFinanceiroPendente('receber', true),
+    pagarMes: totalFinanceiroPendente('pagar', true)
+  }));
+  assert(totais.receberMes < totais.receberTudo, 'totalFinanceiroPendente(tipo, true) considera só o mês atual — soma menos que o total geral quando existe conta pra mês que vem');
+  assert(totais.receberMes >= 500, 'a previsão do mês inclui a conta a receber que vence hoje');
+  assert(totais.pagarMes >= 200 && totais.pagarMes < 9999, 'a previsão do mês inclui só contas pendentes desse mês (ignora a que já está paga)');
+
+  await page.evaluate(() => mostrarAba('financeiro'));
+  await page.waitForTimeout(150);
+  const cardsFinTexto = await page.evaluate(() => document.getElementById('cardsFinanceiro').textContent);
+  assert(/Total a receber/.test(cardsFinTexto), 'card "Total a receber" aparece no Financeiro');
+  assert(/Total a pagar/.test(cardsFinTexto), 'card "Total a pagar" aparece no Financeiro');
+  assert(/Saldo geral/.test(cardsFinTexto), 'card "Saldo geral" (a receber menos a pagar) aparece no Financeiro');
+  assert(/Previsão de/.test(cardsFinTexto), 'card de previsão do mês atual aparece no Financeiro');
+
+  await page.evaluate(() => mostrarAba('dashboard'));
+  await page.waitForTimeout(150);
+  const cardsDashTexto = await page.evaluate(() => document.getElementById('cardsDashboard').textContent);
+  assert(/Total a receber/.test(cardsDashTexto) && /Total a pagar/.test(cardsDashTexto) && /Saldo geral/.test(cardsDashTexto) && /Previsão de/.test(cardsDashTexto), 'os mesmos cards (a receber, a pagar, saldo, previsão do mês) aparecem também no Dashboard, com os mesmos rótulos do Financeiro');
+
+  console.log('Grupo: dashboard — contas a pagar/receber do dia');
+  const doDia = await page.evaluate(() => ({
+    pagarHojeTexto: document.getElementById('corpoPagarHoje').textContent,
+    receberHojeTexto: document.getElementById('corpoReceberHoje').textContent,
+    subPagar: document.getElementById('subtituloContasPagarHoje').textContent,
+    subReceber: document.getElementById('subtituloContasReceberHoje').textContent
+  }));
+  assert(doDia.pagarHojeTexto.includes('Pagar este mes CI'), 'a conta a pagar que vence hoje aparece no quadro "Contas a pagar hoje"');
+  assert(doDia.receberHojeTexto.includes('Receber este mes CI'), 'a conta a receber que vence hoje aparece no quadro "Contas a receber hoje"');
+  assert(!doDia.receberHojeTexto.includes('Receber mes que vem CI'), 'a conta que só vence no mês que vem não aparece no quadro de hoje');
+  assert(!doDia.pagarHojeTexto.includes('Ja pago CI'), 'uma conta já paga não aparece no quadro de hoje mesmo vencendo hoje');
+  assert(/1 conta/.test(doDia.subPagar) && /R\$ 200,00/.test(doDia.subPagar), 'o subtítulo de "a pagar hoje" mostra a quantidade e o total certo');
+  assert(/1 conta/.test(doDia.subReceber) && /R\$ 500,00/.test(doDia.subReceber), 'o subtítulo de "a receber hoje" mostra a quantidade e o total certo');
+
+  await page.evaluate(() => {
+    state.financeiro.push({id:'fin_amanha_pagar', tipo:'pagar', descricao:'Pagar amanha CI', valor:77, vencimento:somarDias(hojeStr(),1), categoria:'', clienteId:null, status:'pendente'});
+    marcarAlterado();
+    renderDashboard();
+  });
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => !document.getElementById('corpoPagarHoje').textContent.includes('Pagar amanha CI')), 'uma conta que vence amanhã não aparece no quadro "Contas a pagar hoje"');
+
+  await page.evaluate(() => {
+    state.financeiro.forEach(f => { if(f.id === 'fin_mes_pagar' || f.id === 'fin_amanha_pagar') moverParaLixeira(f); });
+    renderDashboard();
+  });
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('corpoPagarHoje').textContent.includes('Nenhuma conta a pagar vence hoje')), 'quando não tem nada vencendo hoje, o quadro mostra a mensagem de vazio');
+  assert(await page.evaluate(() => document.getElementById('subtituloContasPagarHoje').textContent === 'Nada vencendo hoje'), 'o subtítulo também reflete o estado vazio');
 
   console.log('Grupo: cache local (localStorage) — entra já com os dados na tela, sem esperar a rede');
   const chaveCache = await page.evaluate(() => CHAVE_CACHE_LOCAL);

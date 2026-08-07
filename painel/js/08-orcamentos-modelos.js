@@ -302,9 +302,12 @@ function renderOrcamentos(){
   lista.forEach(o => {
     const tr = document.createElement('tr');
     const podeGerarConta = o.status === 'Aprovado' && !o.financeiroGerado;
+    const botaoFinanceiro = o.financeiroGerado
+      ? `<button class="btn-icon" onclick="verFinanceiroDoOrcamento('${o.id}')" title="Ver no financeiro">R$🔎</button>`
+      : (podeGerarConta ? `<button class="btn-icon" onclick="gerarContaReceber('${o.id}')" title="Gerar conta a receber">R$+</button>` : '');
     tr.innerHTML = `<td>${esc(o.numero)}</td><td>${fmtDataExibir(o.data)}</td><td>${esc(nomeCliente(o.clienteId))}</td><td>R$ ${fmtMoeda(o.total)}</td><td>${badgeStatusOrc(o.status)}</td>
       <td class="acoes">
-        ${podeGerarConta ? `<button class="btn-icon" onclick="gerarContaReceber('${o.id}')" title="Gerar conta a receber">R$+</button>` : ''}
+        ${botaoFinanceiro}
         <button class="btn-icon" onclick="imprimirOrcamento('${o.id}')" title="Imprimir / PDF">🖨</button>
         <button class="btn-icon" onclick="enviarOrcamentoWhatsApp('${o.id}')" title="Enviar por WhatsApp">📲</button>
         <button class="btn-icon" onclick="abrirFormOrcamento('${o.id}')" title="Editar">✎</button>
@@ -336,5 +339,40 @@ function gerarContaReceber(orcId){
   renderProdutos();
   const avisoEstoque = (!jaTinhaBaixado && o.estoqueBaixado) ? '\n\nBaixa de estoque feita automaticamente para os produtos desse orçamento.' : '';
   alert('Conta a receber gerada no Financeiro para o orçamento nº ' + o.numero + '.' + avisoEstoque);
+}
+// Lançamento do Financeiro ainda ativo (não excluído) gerado a partir deste orçamento,
+// se existir — usado tanto pra sincronizar valor/cliente quanto pra checar, ao clicar em
+// "Ver no financeiro", se o vínculo ainda é válido (a pessoa pode ter excluído o lançamento
+// direto na tela do Financeiro depois de gerado).
+function financeiroVinculadoAoOrcamento(orcId){
+  return financeiroAtivos().find(x => x.orcamentoId === orcId) || null;
+}
+// Clique no botão "Ver no financeiro": confere se o lançamento gerado a partir deste
+// orçamento ainda existe e, se sim, leva direto pra aba Financeiro com ele em destaque.
+// Se o lançamento não existir mais (foi excluído manualmente), oferece gerar de novo em
+// vez de simplesmente não fazer nada.
+function verFinanceiroDoOrcamento(orcId){
+  const o = state.orcamentos.find(x => x.id === orcId);
+  if(!o) return;
+  const f = financeiroVinculadoAoOrcamento(orcId);
+  if(!f){
+    if(confirm('Não encontramos mais o lançamento financeiro deste orçamento — ele pode ter sido excluído.\n\nDeseja gerar novamente?')){
+      o.financeiroGerado = false;
+      gerarContaReceber(orcId);
+    }
+    return;
+  }
+  mostrarAba('financeiro');
+  document.getElementById('filtroTipoFin').value = '';
+  document.getElementById('filtroStatusFin').value = '';
+  renderFinanceiro();
+  setTimeout(() => {
+    const linha = document.getElementById('financeiro-linha-' + f.id);
+    if(!linha) return;
+    linha.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    linha.classList.remove('linha-em-foco');
+    void linha.offsetWidth; // força reflow pra reiniciar a animação se já tiver sido usada antes
+    linha.classList.add('linha-em-foco');
+  }, 60);
 }
 

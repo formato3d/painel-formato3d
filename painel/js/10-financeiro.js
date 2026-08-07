@@ -302,6 +302,7 @@ function renderFinanceiro(){
   }
   lista.forEach(f => {
     const tr = document.createElement('tr');
+    tr.id = 'financeiro-linha-' + f.id;
     const vencido = estaVencido(f);
     const statusBadge = f.status === 'pago'
       ? '<span class="badge pago">Pago/Recebido</span>'
@@ -341,7 +342,7 @@ function renderFinanceiro(){
 // financeiroDessincronizado) pra revisão manual em vez de mudar sozinho por baixo dos panos.
 function sincronizarFinanceiroComOrcamento(o){
   if(!o.financeiroGerado) return;
-  const f = state.financeiro.find(x => x.orcamentoId === o.id && !x.excluidoEm);
+  const f = financeiroVinculadoAoOrcamento(o.id);
   if(!f || f.status === 'pago') return;
   f.valor = o.total;
   f.clienteId = o.clienteId;
@@ -414,18 +415,37 @@ function abrirRecibo(id){
   document.body.classList.add('modo-impressao');
   window.print();
 }
+// Soma dos lançamentos pendentes de um tipo ("pagar"/"receber"), opcionalmente só
+// os que vencem no mês/ano atual — usado nos cards pra separar "tudo que ainda vou
+// receber/pagar, algum dia" da previsão do mês corrente.
+function totalFinanceiroPendente(tipo, apenasMesAtual){
+  const hoje = new Date();
+  return financeiroAtivos()
+    .filter(f => f.tipo === tipo && f.status === 'pendente')
+    .filter(f => {
+      if(!apenasMesAtual) return true;
+      const d = paraDataObj(f.vencimento);
+      return !!d && d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
+    })
+    .reduce((s,f) => s + f.valor, 0);
+}
 function renderCardsFinanceiro(){
-  const receberPendente = financeiroAtivos().filter(f => f.tipo === 'receber' && f.status === 'pendente').reduce((s,f) => s + f.valor, 0);
-  const pagarPendente = financeiroAtivos().filter(f => f.tipo === 'pagar' && f.status === 'pendente').reduce((s,f) => s + f.valor, 0);
+  const hoje = new Date();
+  const receberPendente = totalFinanceiroPendente('receber', false);
+  const pagarPendente = totalFinanceiroPendente('pagar', false);
   const saldo = receberPendente - pagarPendente;
+  const receberMes = totalFinanceiroPendente('receber', true);
+  const pagarMes = totalFinanceiroPendente('pagar', true);
+  const previsaoMes = receberMes - pagarMes;
   const vencidos = financeiroAtivos().filter(estaVencido).length;
   const lucro = lucroDoMes();
   document.getElementById('cardsFinanceiro').innerHTML = `
-    <div class="card"><div class="label">A receber (pendente)</div><div class="value green">R$ ${fmtMoeda(receberPendente)}</div></div>
-    <div class="card"><div class="label">A pagar (pendente)</div><div class="value red">R$ ${fmtMoeda(pagarPendente)}</div></div>
-    <div class="card"><div class="label">Saldo previsto</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div></div>
+    <div class="card"><div class="label">Total a receber</div><div class="value green">R$ ${fmtMoeda(receberPendente)}</div><div class="sub">Todas as contas pendentes, de qualquer data</div></div>
+    <div class="card"><div class="label">Total a pagar</div><div class="value red">R$ ${fmtMoeda(pagarPendente)}</div><div class="sub">Todas as contas pendentes, de qualquer data</div></div>
+    <div class="card"><div class="label">Saldo geral</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">A receber menos a pagar, considerando tudo pendente</div></div>
+    <div class="card"><div class="label">Previsão de ${NOMES_MES_ABREV[hoje.getMonth()]}</div><div class="value ${previsaoMes >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(previsaoMes)}</div><div class="sub">Só o que vence este mês: R$ ${fmtMoeda(receberMes)} a receber − R$ ${fmtMoeda(pagarMes)} a pagar</div></div>
     <div class="card"><div class="label">Contas vencidas</div><div class="value ${vencidos > 0 ? 'red' : ''}">${vencidos}</div></div>
-    <div class="card"><div class="label">Lucro do mês (vendas aprovadas)</div><div class="value ${lucro >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(lucro)}</div><div class="sub">Total cobrado menos custo dos itens</div></div>
+    <div class="card"><div class="label">Lucro do mês (vendas aprovadas)</div><div class="value ${lucro >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(lucro)}</div><div class="sub">Total cobrado menos custo dos itens — não é o mesmo que o saldo de caixa acima</div></div>
   `;
 }
 

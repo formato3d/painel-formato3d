@@ -2,10 +2,13 @@
    DASHBOARD
    ========================================================= */
 function renderDashboard(){
-  const receberPendente = financeiroAtivos().filter(f => f.tipo === 'receber' && f.status === 'pendente').reduce((s,f) => s + f.valor, 0);
-  const pagarPendente = financeiroAtivos().filter(f => f.tipo === 'pagar' && f.status === 'pendente').reduce((s,f) => s + f.valor, 0);
-  const saldo = receberPendente - pagarPendente;
   const hoje = new Date();
+  const receberPendente = totalFinanceiroPendente('receber', false);
+  const pagarPendente = totalFinanceiroPendente('pagar', false);
+  const saldo = receberPendente - pagarPendente;
+  const receberMes = totalFinanceiroPendente('receber', true);
+  const pagarMes = totalFinanceiroPendente('pagar', true);
+  const previsaoMes = receberMes - pagarMes;
   const orcAtivos = orcamentosAtivos();
   const orcMes = orcAtivos.filter(o => {
     const d = paraDataObj(o.data);
@@ -17,9 +20,10 @@ function renderDashboard(){
     <div class="card"><div class="label">Clientes</div><div class="value">${clientesAtivos().length}</div></div>
     <div class="card"><div class="label">Produtos/serviços</div><div class="value">${produtosAtivos().length}</div></div>
     <div class="card"><div class="label">Orçamentos este mês</div><div class="value">${orcMes}</div><div class="sub">${orcAtivos.length} no total · próximo nº ${String(state.proximoNumero).padStart(4,'0')}</div></div>
-    <div class="card"><div class="label">A receber (pendente)</div><div class="value green">R$ ${fmtMoeda(receberPendente)}</div></div>
-    <div class="card"><div class="label">A pagar (pendente)</div><div class="value red">R$ ${fmtMoeda(pagarPendente)}</div></div>
-    <div class="card"><div class="label">Saldo previsto</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div></div>
+    <div class="card"><div class="label">Total a receber</div><div class="value green">R$ ${fmtMoeda(receberPendente)}</div><div class="sub">Todas as contas pendentes, de qualquer data</div></div>
+    <div class="card"><div class="label">Total a pagar</div><div class="value red">R$ ${fmtMoeda(pagarPendente)}</div><div class="sub">Todas as contas pendentes, de qualquer data</div></div>
+    <div class="card"><div class="label">Saldo geral</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">A receber menos a pagar, considerando tudo pendente</div></div>
+    <div class="card"><div class="label">Previsão de ${NOMES_MES_ABREV[hoje.getMonth()]}</div><div class="value ${previsaoMes >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(previsaoMes)}</div><div class="sub">Só o que vence este mês: R$ ${fmtMoeda(receberMes)} a receber − R$ ${fmtMoeda(pagarMes)} a pagar</div></div>
     <div class="card"><div class="label">Lucro do mês</div><div class="value ${lucro >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(lucro)}</div><div class="sub">Vendas aprovadas menos custo</div></div>
   `;
 
@@ -48,6 +52,41 @@ function renderDashboard(){
   });
 
   renderOrcamentosParados();
+  renderContasDoDia();
+}
+
+// Lançamentos pendentes de um tipo ("pagar"/"receber") cujo vencimento é hoje —
+// nem atrasado, nem futuro. Usado nos quadros "Contas a pagar/receber hoje" do
+// dashboard, pra dar uma conferida rápida no que precisa ser resolvido no dia.
+function financeiroDoDia(tipo){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  return financeiroAtivos()
+    .filter(f => f.tipo === tipo && f.status === 'pendente' && f.vencimento)
+    .filter(f => {
+      const d = paraDataObj(f.vencimento);
+      if(!d) return false;
+      d.setHours(0,0,0,0);
+      return d.getTime() === hoje.getTime();
+    })
+    .sort((a,b) => (nomeClienteOpcional(a.clienteId) || '').localeCompare(nomeClienteOpcional(b.clienteId) || ''));
+}
+function renderQuadroContasDoDia(tipo, idSubtitulo, idCorpo, mensagemVazio){
+  const lista = financeiroDoDia(tipo);
+  const total = lista.reduce((s,f) => s + f.valor, 0);
+  document.getElementById(idSubtitulo).textContent = lista.length
+    ? lista.length + ' conta' + (lista.length > 1 ? 's' : '') + ' · R$ ' + fmtMoeda(total)
+    : 'Nada vencendo hoje';
+  const corpo = document.getElementById(idCorpo);
+  corpo.innerHTML = lista.length === 0 ? `<tr class="empty-row"><td colspan="3">${mensagemVazio}</td></tr>` : '';
+  lista.forEach(f => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${esc(f.descricao)}</td><td>${esc(nomeClienteOpcional(f.clienteId))}</td><td>R$ ${fmtMoeda(f.valor)}</td>`;
+    corpo.appendChild(tr);
+  });
+}
+function renderContasDoDia(){
+  renderQuadroContasDoDia('pagar', 'subtituloContasPagarHoje', 'corpoPagarHoje', 'Nenhuma conta a pagar vence hoje.');
+  renderQuadroContasDoDia('receber', 'subtituloContasReceberHoje', 'corpoReceberHoje', 'Nenhuma conta a receber vence hoje.');
 }
 
 // Orçamentos com status "Pendente" há X dias ou mais, sem resposta — sinaliza pra dar um retorno ao cliente.

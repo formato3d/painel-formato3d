@@ -178,6 +178,19 @@
     background:var(--card);
     color:var(--text);
   }
+  .subtabs{ display:flex; gap:4px; background:var(--surface-2); border-radius:8px; padding:3px; }
+  .subtabs .subtab{
+    background:none;
+    border:none;
+    padding:7px 14px;
+    font-size:13px;
+    font-weight:bold;
+    color:var(--navy);
+    cursor:pointer;
+    border-radius:6px;
+  }
+  .subtabs .subtab:hover{ background:var(--surface-hover); }
+  .subtabs .subtab.active{ background:var(--navy); color:#fff; }
   button.btn{
     background:var(--navy);
     color:#fff;
@@ -1062,15 +1075,15 @@ Obrigado pela preferência!</textarea></div>
   <!-- ============ FINANCEIRO ============ -->
   <section id="tab-financeiro" class="tab-section hidden">
     <h2 class="section-title">Contas a pagar e receber</h2>
-    <div class="cards-grid" id="cardsFinanceiro" style="margin-bottom:20px;"></div>
+    <div class="cards-grid" id="cardsResumoFinanceiro" style="margin-bottom:20px;"></div>
 
     <div class="panel-header">
       <div class="panel-actions">
-        <select id="filtroTipoFin" onchange="renderFinanceiro()">
-          <option value="">Todos os tipos</option>
-          <option value="receber">A receber</option>
-          <option value="pagar">A pagar</option>
-        </select>
+        <div class="subtabs" id="subtabsFinanceiro">
+          <button type="button" class="subtab active" id="subtabFinPagar" onclick="mostrarAbaFinanceiro('pagar')">A pagar</button>
+          <button type="button" class="subtab" id="subtabFinReceber" onclick="mostrarAbaFinanceiro('receber')">A receber</button>
+        </div>
+        <select id="filtroMesFin" onchange="renderFinanceiro()"></select>
         <select id="filtroStatusFin" onchange="renderFinanceiro()">
           <option value="">Todos os status</option>
           <option value="pendente">Pendente</option>
@@ -1082,6 +1095,8 @@ Obrigado pela preferência!</textarea></div>
         <button class="btn" onclick="abrirFormFinanceiro()">+ Nova conta</button>
       </div>
     </div>
+
+    <div class="cards-grid" id="cardsTipoFinanceiro" style="margin-bottom:20px;"></div>
 
     <div id="formFinanceiroWrap" class="form-card hidden">
       <h3 id="formFinanceiroTitulo">Nova conta</h3>
@@ -1154,7 +1169,7 @@ Obrigado pela preferência!</textarea></div>
     </div>
 
     <table class="data">
-      <thead><tr><th>Tipo</th><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Anexos</th><th></th></tr></thead>
+      <thead><tr><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Anexos</th><th></th></tr></thead>
       <tbody id="corpoTabelaFinanceiro"></tbody>
     </table>
   </section>

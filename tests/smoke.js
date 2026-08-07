@@ -231,6 +231,26 @@ function assert(condicao, mensagem){
   assert(await page.evaluate((id) => financeiroDessincronizado(state.financeiro.find(f => f.id === id)) === true, finSyncId), 'venda paga com orçamento alterado depois fica marcada como desencontrada');
   await page.evaluate(() => renderFinanceiro());
   assert(await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent.includes('orçamento mudou')), 'aviso de desencontro aparece na tabela do Financeiro');
+  assert(await page.evaluate((id) => document.getElementById('financeiro-linha-' + id).innerHTML.includes('atualizarFinanceiroComOrcamento'), finSyncId), 'botão de atualizar (🔄) aparece na linha do lançamento desencontrado');
+
+  // Clica no botão de atualizar: tem que perguntar (mostrando de/para) antes de sobrescrever um pagamento já confirmado.
+  await page.evaluate((id) => {
+    window.__confirmMsgAtualiza = null;
+    window.confirm = (msg) => { window.__confirmMsgAtualiza = msg; return false; }; // recusa dessa vez
+    atualizarFinanceiroComOrcamento(id);
+  }, finSyncId);
+  await page.waitForTimeout(150);
+  const respostaConfirmAtualiza = await page.evaluate(() => window.__confirmMsgAtualiza);
+  assert(!!respostaConfirmAtualiza && /180.*999|R\$ 180,00.*R\$ 999,00/.test(respostaConfirmAtualiza), 'a pergunta de atualizar mostra o valor antigo e o novo (de/para)');
+  assert(await page.evaluate((id) => state.financeiro.find(f => f.id === id).valor === 180, finSyncId), 'recusando a pergunta, o lançamento continua com o valor antigo');
+
+  await page.evaluate((id) => { window.confirm = () => true; atualizarFinanceiroComOrcamento(id); }, finSyncId);
+  await page.waitForTimeout(150);
+  assert(await page.evaluate((id) => state.financeiro.find(f => f.id === id).valor === 999, finSyncId), 'aceitando a pergunta, o lançamento passa a usar o valor atual do orçamento');
+  assert(await page.evaluate((id) => financeiroDessincronizado(state.financeiro.find(f => f.id === id)) === false, finSyncId), 'depois de atualizar, o lançamento não fica mais marcado como desencontrado');
+  await page.evaluate(() => renderFinanceiro());
+  assert(await page.evaluate(() => !document.getElementById('corpoTabelaFinanceiro').textContent.includes('orçamento mudou')), 'o aviso de desencontro some da tabela depois de atualizar');
+  assert(await page.evaluate((id) => !document.getElementById('financeiro-linha-' + id).innerHTML.includes('atualizarFinanceiroComOrcamento'), finSyncId), 'o botão de atualizar (🔄) some depois que não tem mais desencontro');
 
   // Formulário: cliente/valor ficam travados quando a venda está vinculada a um orçamento.
   await page.evaluate((id) => abrirFormFinanceiro(id), finSyncId);

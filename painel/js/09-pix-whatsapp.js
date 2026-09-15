@@ -172,6 +172,8 @@ function imprimirOrcamento(id){
   document.getElementById('printArea').classList.add('ativo');
   const areaRecibo = document.getElementById('printAreaRecibo');
   if(areaRecibo) areaRecibo.classList.remove('ativo');
+  const areaCatalogo = document.getElementById('printAreaCatalogo');
+  if(areaCatalogo) areaCatalogo.classList.remove('ativo');
   document.body.classList.add('modo-impressao');
   window.print();
 }

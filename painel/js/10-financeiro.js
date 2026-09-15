@@ -486,6 +486,8 @@ function abrirRecibo(id){
 
   document.getElementById('printAreaRecibo').classList.add('ativo');
   document.getElementById('printArea').classList.remove('ativo');
+  const areaCatalogoRecibo = document.getElementById('printAreaCatalogo');
+  if(areaCatalogoRecibo) areaCatalogoRecibo.classList.remove('ativo');
   document.body.classList.add('modo-impressao');
   window.print();
 }

@@ -3,12 +3,6 @@
    ========================================================= */
 function renderDashboard(){
   const hoje = new Date();
-  const receberPendente = totalFinanceiroPendente('receber', false);
-  const pagarPendente = totalFinanceiroPendente('pagar', false);
-  const saldo = receberPendente - pagarPendente;
-  const receberMes = totalFinanceiroPendente('receber', true);
-  const pagarMes = totalFinanceiroPendente('pagar', true);
-  const previsaoMes = receberMes - pagarMes;
   const orcAtivos = orcamentosAtivos();
   const orcMes = orcAtivos.filter(o => {
     const d = paraDataObj(o.data);
@@ -16,16 +10,16 @@ function renderDashboard(){
   }).length;
 
   const lucro = lucroDoMes();
-  const saldoReal = saldoRealCaixa();
+  const saidas = totalSaidasReal();
+  const recebido = totalRecebidoReal();
+  const saldo = saldoRealCaixa();
   document.getElementById('cardsDashboard').innerHTML = `
     <div class="card"><div class="label">Clientes</div><div class="value">${clientesAtivos().length}</div></div>
     <div class="card"><div class="label">Produtos/serviços</div><div class="value">${produtosAtivos().length}</div></div>
     <div class="card"><div class="label">Orçamentos este mês</div><div class="value">${orcMes}</div><div class="sub">${orcAtivos.length} no total · próximo nº ${String(state.proximoNumero).padStart(4,'0')}</div></div>
-    <div class="card"><div class="label">Total a receber</div><div class="value green">R$ ${fmtMoeda(receberPendente)}</div><div class="sub">Todas as contas pendentes, de qualquer data</div></div>
-    <div class="card"><div class="label">Total a pagar</div><div class="value red">R$ ${fmtMoeda(pagarPendente)}</div><div class="sub">Todas as contas pendentes, de qualquer data</div></div>
-    <div class="card"><div class="label">Saldo geral</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">A receber menos a pagar, considerando tudo pendente</div></div>
-    <div class="card"><div class="label">Saldo real</div><div class="value ${saldoReal >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldoReal)}</div><div class="sub">Recebido menos pago e comprado de verdade, desde o início — bate com o saldo do banco</div></div>
-    <div class="card"><div class="label">Previsão de ${NOMES_MES_ABREV[hoje.getMonth()]}</div><div class="value ${previsaoMes >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(previsaoMes)}</div><div class="sub">Só o que vence este mês: R$ ${fmtMoeda(receberMes)} a receber − R$ ${fmtMoeda(pagarMes)} a pagar</div></div>
+    <div class="card"><div class="label">Saídas</div><div class="value red">R$ ${fmtMoeda(saidas)}</div><div class="sub">Contas pagas + compras, desde o início</div></div>
+    <div class="card"><div class="label">Recebido</div><div class="value green">R$ ${fmtMoeda(recebido)}</div><div class="sub">Contas a receber já recebidas, desde o início</div></div>
+    <div class="card"><div class="label">Saldo</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">Recebido menos saídas — bate com o saldo do banco</div></div>
     <div class="card"><div class="label">Lucro do mês</div><div class="value ${lucro >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(lucro)}</div><div class="sub">Vendas aprovadas menos custo</div></div>
   `;
 

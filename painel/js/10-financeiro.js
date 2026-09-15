@@ -299,7 +299,17 @@ function mostrarAbaFinanceiro(tipo){
   abaFinanceiroAtiva = tipo;
   document.getElementById('subtabFinPagar').classList.toggle('active', tipo === 'pagar');
   document.getElementById('subtabFinReceber').classList.toggle('active', tipo === 'receber');
-  renderFinanceiro();
+  document.getElementById('subtabFinCompras').classList.toggle('active', tipo === 'compras');
+  // "Compras" é uma seção própria — campos e tabela diferentes de Financeiro (ver
+  // 14-compras.js) — então em vez de reaproveitar a tabela/formulário de Contas a
+  // pagar/receber, mostra o bloco certo e esconde o outro.
+  document.getElementById('blocoContasFinanceiro').classList.toggle('hidden', tipo === 'compras');
+  document.getElementById('blocoCompras').classList.toggle('hidden', tipo !== 'compras');
+  if(tipo === 'compras'){
+    renderCompras();
+  } else {
+    renderFinanceiro();
+  }
 }
 // "YYYY-MM" a partir do vencimento de um lançamento — chave usada pelo filtro de mês.
 function chaveMesFinanceiro(f){
@@ -518,16 +528,36 @@ function totalFinanceiroPeriodo(tipo, mesAno){
 function vencidasPorTipo(tipo){
   return financeiroAtivos().filter(f => f.tipo === tipo && estaVencido(f)).length;
 }
+// Saldo REAL de caixa: soma de tudo que já entrou de verdade (contas a receber já
+// marcadas como pagas/recebidas) menos tudo que já saiu de verdade — contas a pagar já
+// pagas mais toda Compra registrada (que, por definição, já é um gasto realizado; ver
+// 14-compras.js). Diferente do card "Saldo previsto" (só a diferença entre pendências,
+// uma previsão), este é pensado pra bater com o saldo de verdade da conta bancária da
+// empresa — é o que resolve compras que "somem" do saldo sem aparecer em lugar nenhum.
+function totalRecebidoReal(){
+  return financeiroAtivos().filter(f => f.tipo === 'receber' && f.status === 'pago').reduce((s,f) => s + (f.valor || 0), 0);
+}
+function totalPagoReal(){
+  return financeiroAtivos().filter(f => f.tipo === 'pagar' && f.status === 'pago').reduce((s,f) => s + (f.valor || 0), 0);
+}
+function totalComprasReal(){
+  return comprasAtivos().reduce((s,c) => s + (c.valor || 0), 0);
+}
+function saldoRealCaixa(){
+  return totalRecebidoReal() - totalPagoReal() - totalComprasReal();
+}
 function renderCardsFinanceiro(){
   const mesAno = document.getElementById('filtroMesFin').value;
   const rotuloPeriodo = mesAno ? rotuloMesFinanceiro(mesAno) : 'todas as datas';
   const receber = totalFinanceiroPeriodo('receber', mesAno);
   const pagar = totalFinanceiroPeriodo('pagar', mesAno);
   const saldo = receber - pagar;
+  const saldoReal = saldoRealCaixa();
   document.getElementById('cardsResumoFinanceiro').innerHTML = `
     <div class="card"><div class="label">A receber</div><div class="value green">R$ ${fmtMoeda(receber)}</div><div class="sub">Pendente, ${esc(rotuloPeriodo)}</div></div>
     <div class="card"><div class="label">A pagar</div><div class="value red">R$ ${fmtMoeda(pagar)}</div><div class="sub">Pendente, ${esc(rotuloPeriodo)}</div></div>
-    <div class="card"><div class="label">Saldo</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">A receber menos a pagar, ${esc(rotuloPeriodo)}</div></div>
+    <div class="card"><div class="label">Saldo previsto</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">A receber menos a pagar (só pendências), ${esc(rotuloPeriodo)}</div></div>
+    <div class="card"><div class="label">Saldo real</div><div class="value ${saldoReal >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldoReal)}</div><div class="sub">Recebido menos pago e comprado de verdade, desde o início — bate com o saldo do banco</div></div>
   `;
   const vencidas = vencidasPorTipo(abaFinanceiroAtiva);
   const rotuloTipo = abaFinanceiroAtiva === 'pagar' ? 'a pagar' : 'a receber';

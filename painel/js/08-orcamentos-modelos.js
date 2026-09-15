@@ -17,7 +17,8 @@ function abrirFormOrcamento(id){
   document.getElementById('foValidade').value = o ? o.validadeDias : '7';
   document.getElementById('foStatus').value = o ? o.status : 'Pendente';
   document.getElementById('foFrete').value = o ? fmtMoeda(o.frete) : '0,00';
-  document.getElementById('foDesconto').value = o ? fmtMoeda(o.desconto) : '0,00';
+  document.getElementById('foDescontoTipo').value = o ? (o.descontoTipo || 'valor') : 'valor';
+  document.getElementById('foDesconto').value = o ? fmtMoeda(o.descontoInformado !== undefined ? o.descontoInformado : o.desconto) : '0,00';
   document.getElementById('foObs').value = o ? o.obs : 'Produção iniciada após aprovação da arte.\nObrigado pela preferência!';
   const condicoesFixas = ['À vista', '50% no pedido e 50% na entrega', '100% na entrega'];
   const condSalva = o ? (o.condicaoPagamento || 'À vista') : 'À vista';
@@ -107,6 +108,13 @@ function preencherItemDoProduto(select){
   }
   atualizarTotalOrc();
 }
+// O desconto do orçamento pode ser digitado como valor fixo em R$ ou como percentual —
+// "soma" é o total dos itens (sem frete) sobre o qual o percentual é calculado.
+function calcularDescontoOrc(soma){
+  const tipo = document.getElementById('foDescontoTipo') ? document.getElementById('foDescontoTipo').value : 'valor';
+  const informado = parseMoeda(document.getElementById('foDesconto').value);
+  return tipo === 'percentual' ? soma * (informado / 100) : informado;
+}
 function atualizarTotalOrc(){
   let soma = 0;
   let somaCusto = 0;
@@ -120,7 +128,7 @@ function atualizarTotalOrc(){
     somaCusto += qtd * custoUnit;
   });
   const frete = parseMoeda(document.getElementById('foFrete').value);
-  const desconto = parseMoeda(document.getElementById('foDesconto').value);
+  const desconto = calcularDescontoOrc(soma);
   const totalGeral = soma + frete - desconto;
   document.getElementById('foTotalGeral').textContent = 'R$ ' + fmtMoeda(totalGeral);
 
@@ -228,6 +236,7 @@ function salvarOrcamento(){
   const formasPagamento = Array.from(document.querySelectorAll('.fo-forma-pag:checked')).map(c => c.value);
 
   const total = atualizarTotalOrc();
+  const somaItens = itens.reduce((s, it) => s + (it.qtd || 0) * (it.valorUnit || 0), 0);
   const dados = {
     clienteId,
     data: document.getElementById('foData').value.trim() || hojeStr(),
@@ -235,7 +244,9 @@ function salvarOrcamento(){
     status: document.getElementById('foStatus').value,
     itens,
     frete: parseMoeda(document.getElementById('foFrete').value),
-    desconto: parseMoeda(document.getElementById('foDesconto').value),
+    desconto: calcularDescontoOrc(somaItens),
+    descontoTipo: document.getElementById('foDescontoTipo').value,
+    descontoInformado: parseMoeda(document.getElementById('foDesconto').value),
     obs: document.getElementById('foObs').value,
     condicaoPagamento,
     formasPagamento,

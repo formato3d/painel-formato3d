@@ -674,12 +674,15 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(900);
 
   console.log('Grupo: botão "Salvar" (💾) força salvar imediatamente, sem esperar o autosave de 800ms');
-  await page.evaluate(() => {
+  // Lê o texto na MESMA chamada que dispara o salvarAgora() — em duas chamadas
+  // separadas, o fetch pro backend (local, quase instantâneo) podia terminar entre
+  // uma chamada e outra e já trocar o texto pra "salvo às...", tornando o teste instável.
+  const textoLogoAposSalvarAgora = await page.evaluate(() => {
     state.clientes.push({id: uid('cliente'), nome: 'Cliente Salvar Agora CI', telefone:'', email:'', cidade:''});
     dirty = true;
     salvarAgora();
+    return document.getElementById('statusSalvo').textContent;
   });
-  const textoLogoAposSalvarAgora = await page.evaluate(() => document.getElementById('statusSalvo').textContent);
   assert(/salvando/i.test(textoLogoAposSalvarAgora), 'clicar em "Salvar" já mostra "salvando..." na hora, sem esperar o debounce normal de 800ms do autosave');
   await page.waitForTimeout(900);
   assert(await page.evaluate(() => document.getElementById('statusSalvo').textContent.startsWith('salvo às')), 'depois de salvarAgora(), o painel confirma que salvou');

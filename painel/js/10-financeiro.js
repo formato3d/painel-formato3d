@@ -272,15 +272,93 @@ function excluirFinanceiro(id){
   marcarAlterado();
   renderFinanceiro();
 }
+// Clicar no ✓ de uma conta pendente abre o pop-up de confirmação (valor, data do
+// pagamento, forma de pagamento — ver abrirConfirmarPagamento); clicar no ↺ de uma conta
+// já paga volta direto pra pendente, sem precisar confirmar de novo (é só desfazer).
 function alternarStatusFinanceiro(id){
   const f = state.financeiro.find(x => x.id === id);
   if(!f) return;
-  const vaiParaPago = f.status !== 'pago';
-  f.status = vaiParaPago ? 'pago' : 'pendente';
+  if(f.status === 'pago'){
+    if(f.valorOriginal !== undefined){ f.valor = f.valorOriginal; delete f.valorOriginal; }
+    delete f.dataPagamento;
+    delete f.formaPagamentoConfirmada;
+    delete f.descontoMaquininha;
+    f.status = 'pendente';
+    marcarAlterado();
+    renderFinanceiro();
+    return;
+  }
+  abrirConfirmarPagamento(id);
+}
+
+/* =========================================================
+   POP-UP DE CONFIRMAÇÃO DE PAGAMENTO/RECEBIMENTO
+   Em vez de marcar como pago na hora com um clique só, pede pra conferir/ajustar valor,
+   data e forma de pagamento — e, se for cartão de crédito numa conta a receber, permite
+   informar o desconto da maquininha (juros), que já é abatido do valor registrado como
+   recebido (fica certo no Saldo real desde a hora que é confirmado).
+   ========================================================= */
+let confirmarPagamentoId = null;
+function abrirConfirmarPagamento(id){
+  const f = state.financeiro.find(x => x.id === id);
+  if(!f) return;
+  confirmarPagamentoId = id;
+  document.getElementById('confirmarPagamentoTitulo').textContent = f.tipo === 'receber' ? 'Confirmar recebimento' : 'Confirmar pagamento';
+  document.getElementById('confirmarPagamentoSub').textContent = (f.descricao || '') + ' — valor da conta: R$ ' + fmtMoeda(f.valor);
+  document.getElementById('cfValor').value = fmtMoeda(f.valor);
+  document.getElementById('cfData').value = hojeStr();
+  document.getElementById('cfFormaPagamento').value = 'Pix';
+  document.getElementById('cfDesconto').value = '0,00';
+  alternarDescontoConfirmarPagamento();
+  document.getElementById('confirmarPagamentoWrap').classList.remove('hidden');
+}
+function fecharConfirmarPagamento(){
+  document.getElementById('confirmarPagamentoWrap').classList.add('hidden');
+  confirmarPagamentoId = null;
+}
+// O desconto da maquininha só faz sentido pra dinheiro que está ENTRANDO (conta a
+// receber) via cartão de crédito — é a taxa que a operadora desconta antes de cair na
+// conta. Em qualquer outro caso (outra forma de pagamento, ou uma conta a pagar) o
+// bloco fica escondido.
+function alternarDescontoConfirmarPagamento(){
+  const f = confirmarPagamentoId ? state.financeiro.find(x => x.id === confirmarPagamentoId) : null;
+  const mostra = !!f && f.tipo === 'receber' && document.getElementById('cfFormaPagamento').value === 'Cartão de crédito';
+  document.getElementById('cfDescontoBloco').classList.toggle('hidden', !mostra);
+  atualizarPreviewDescontoConfirmarPagamento();
+}
+function atualizarPreviewDescontoConfirmarPagamento(){
+  const previewEl = document.getElementById('cfDescontoPreview');
+  if(!previewEl) return;
+  if(document.getElementById('cfDescontoBloco').classList.contains('hidden')){ previewEl.textContent = ''; return; }
+  const valor = parseMoeda(document.getElementById('cfValor').value);
+  const desconto = parseMoeda(document.getElementById('cfDesconto').value);
+  previewEl.textContent = desconto > 0 ? ('Valor líquido que entra no Saldo real: R$ ' + fmtMoeda(Math.max(0, valor - desconto))) : '';
+}
+function confirmarPagamentoSalvar(){
+  const f = state.financeiro.find(x => x.id === confirmarPagamentoId);
+  if(!f) return;
+  const valorInformado = parseMoeda(document.getElementById('cfValor').value);
+  if(!valorInformado){ alert('Informe o valor.'); return; }
+  const dataInformada = document.getElementById('cfData').value.trim();
+  if(!paraDataObj(dataInformada)){ alert('Informe uma data válida (dd/mm/aaaa).'); return; }
+  const formaPagamento = document.getElementById('cfFormaPagamento').value;
+  const mostraDesconto = !document.getElementById('cfDescontoBloco').classList.contains('hidden');
+  const desconto = mostraDesconto ? parseMoeda(document.getElementById('cfDesconto').value) : 0;
+  const valorLiquido = Math.max(0, valorInformado - desconto);
+
+  if(f.valorOriginal === undefined) f.valorOriginal = f.valor;
+  f.valor = valorLiquido;
+  f.status = 'pago';
+  f.dataPagamento = dataInformada;
+  f.formaPagamentoConfirmada = formaPagamento;
+  f.descontoMaquininha = desconto || 0;
+
+  const ehReceber = f.tipo === 'receber';
   marcarAlterado();
+  fecharConfirmarPagamento();
   renderFinanceiro();
   // Pagamento de uma venda (conta a receber) confirmado agora — oferece gerar o recibo na hora.
-  if(vaiParaPago && f.tipo === 'receber'){
+  if(ehReceber){
     if(confirm('Pagamento confirmado!\n\nDeseja gerar o recibo agora?')) abrirRecibo(f.id);
   }
 }
@@ -360,8 +438,11 @@ function renderFinanceiro(){
     const tr = document.createElement('tr');
     tr.id = 'financeiro-linha-' + f.id;
     const vencido = estaVencido(f);
+    const detalhePagamento = f.status === 'pago' && (f.dataPagamento || f.formaPagamentoConfirmada)
+      ? [f.dataPagamento ? ('em ' + fmtDataExibir(f.dataPagamento)) : '', f.formaPagamentoConfirmada || '', f.descontoMaquininha ? ('desconto de R$ ' + fmtMoeda(f.descontoMaquininha) + ' na maquininha') : ''].filter(Boolean).join(' · ')
+      : '';
     const statusBadge = f.status === 'pago'
-      ? '<span class="badge pago">Pago/Recebido</span>'
+      ? `<span class="badge pago"${detalhePagamento ? ` title="${esc(detalhePagamento)}"` : ''}>Pago/Recebido</span>`
       : (vencido ? '<span class="badge vencido">Vencido</span>' : '<span class="badge pendente">Pendente</span>');
     const dessincronizado = financeiroDessincronizado(f);
     const avisoDessinc = dessincronizado
@@ -546,18 +627,22 @@ function totalComprasReal(){
 function saldoRealCaixa(){
   return totalRecebidoReal() - totalPagoReal() - totalComprasReal();
 }
+// Tudo que já saiu de verdade da conta: contas a pagar já pagas + toda Compra
+// registrada (compras já são, por definição, um gasto realizado).
+function totalSaidasReal(){
+  return totalPagoReal() + totalComprasReal();
+}
+// Cards simples e diretos, sempre desde o início (não filtram por mês): Saídas (o que já
+// saiu), Recebido (o que já entrou) e Saldo (a diferença) — a mesma conta do saldo real de
+// caixa, só que separada em 3 números fáceis de ler em vez de misturar previsto com real.
 function renderCardsFinanceiro(){
-  const mesAno = document.getElementById('filtroMesFin').value;
-  const rotuloPeriodo = mesAno ? rotuloMesFinanceiro(mesAno) : 'todas as datas';
-  const receber = totalFinanceiroPeriodo('receber', mesAno);
-  const pagar = totalFinanceiroPeriodo('pagar', mesAno);
-  const saldo = receber - pagar;
-  const saldoReal = saldoRealCaixa();
+  const saidas = totalSaidasReal();
+  const recebido = totalRecebidoReal();
+  const saldo = saldoRealCaixa();
   document.getElementById('cardsResumoFinanceiro').innerHTML = `
-    <div class="card"><div class="label">A receber</div><div class="value green">R$ ${fmtMoeda(receber)}</div><div class="sub">Pendente, ${esc(rotuloPeriodo)}</div></div>
-    <div class="card"><div class="label">A pagar</div><div class="value red">R$ ${fmtMoeda(pagar)}</div><div class="sub">Pendente, ${esc(rotuloPeriodo)}</div></div>
-    <div class="card"><div class="label">Saldo previsto</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">A receber menos a pagar (só pendências), ${esc(rotuloPeriodo)}</div></div>
-    <div class="card"><div class="label">Saldo real</div><div class="value ${saldoReal >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldoReal)}</div><div class="sub">Recebido menos pago e comprado de verdade, desde o início — bate com o saldo do banco</div></div>
+    <div class="card"><div class="label">Saídas</div><div class="value red">R$ ${fmtMoeda(saidas)}</div><div class="sub">Contas pagas + compras, desde o início</div></div>
+    <div class="card"><div class="label">Recebido</div><div class="value green">R$ ${fmtMoeda(recebido)}</div><div class="sub">Contas a receber já recebidas, desde o início</div></div>
+    <div class="card"><div class="label">Saldo</div><div class="value ${saldo >= 0 ? 'green' : 'red'}">R$ ${fmtMoeda(saldo)}</div><div class="sub">Recebido menos saídas — bate com o saldo do banco</div></div>
   `;
   const vencidas = vencidasPorTipo(abaFinanceiroAtiva);
   const rotuloTipo = abaFinanceiroAtiva === 'pagar' ? 'a pagar' : 'a receber';

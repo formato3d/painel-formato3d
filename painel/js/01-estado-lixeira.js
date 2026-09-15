@@ -44,6 +44,9 @@ let autoSaveTimer = null;
 // salvamentos automáticos até a pessoa recarregar a página, pra não arriscar
 // sobrescrever por cima do que foi salvo depois.
 let bloqueadoPorConflito = false;
+// Guarda uma cópia do estado local (ainda não salvo) no momento de um conflito, pra
+// tentar recuperar sozinho o que tinha sido criado aqui — ver reaplicarCriacoesNaoSalvas_.
+let estadoAntesDoConflito = null;
 
 function uid(tipo){
   const n = state.seq[tipo] || 1;
@@ -226,24 +229,80 @@ function salvarNoServidor(){
 // Chamado quando o servidor recusa salvar por causa de uma revisão desatualizada —
 // ou seja, essa aba carregou os dados antes de alguém (outra aba, outro celular, outro
 // usuário) ter salvo algo mais novo. Em vez de arriscar sobrescrever esses dados mais
-// novos, avisamos e buscamos a versão atual sozinhos (sem precisar de F5) — mas a
-// alteração que a pessoa tentou salvar agora precisa ser repetida, porque ela não foi
-// gravada. Com a verificação periódica (iniciarVerificacaoPeriodica) isso deve ficar
-// raro — só acontece se duas edições caírem quase ao mesmo tempo, antes da próxima
-// verificação automática.
+// novos, avisamos e buscamos a versão atual sozinhos (sem precisar de F5). Com a
+// verificação periódica (iniciarVerificacaoPeriodica) isso deve ficar raro — só
+// acontece se duas edições caírem quase ao mesmo tempo, antes da próxima verificação
+// automática.
 function avisarDadosDesatualizados(){
   clearTimeout(autoSaveTimer);
   bloqueadoPorConflito = true;
+  // Guarda o que estava editado aqui (ainda não salvo) pra tentar recuperar
+  // automaticamente depois de atualizar com a versão mais nova — ver
+  // reaplicarCriacoesNaoSalvas_ logo abaixo.
+  if(!estadoAntesDoConflito){
+    estadoAntesDoConflito = JSON.parse(JSON.stringify(state));
+  }
+  // IMPORTANTE: o salvamento que acabou de ser recusado já terminou (com erro) — a
+  // flag "dirty" não pode continuar travada em true, senão carregarDoServidor() (chamado
+  // logo abaixo) se recusa a aplicar os dados mais novos (ver "if(dirty) return" lá
+  // embaixo), e a verificação periódica de 15s também fica bloqueada PRA SEMPRE
+  // (verificarAtualizacoesPeriodicamente também checa "dirty"). Sem esta linha, o painel
+  // ficava preso mostrando dados velhos até a pessoa dar F5 na mão — e tudo que tinha
+  // sido criado aqui nesse meio-tempo nunca chegava a ser salvo de novo, sumindo
+  // silenciosamente. Essa era a causa principal de orçamentos/lançamentos financeiros
+  // "desaparecendo" mesmo depois do aviso de conflito aparecer.
+  dirty = false;
   const el = document.getElementById('statusSalvo');
   el.textContent = 'dados desatualizados — atualizando...';
   el.classList.add('dirty');
-  if(!window.__avisoDadosDesatualizadosMostrado){
-    window.__avisoDadosDesatualizadosMostrado = true;
-    alert('Estes dados foram alterados em outra aba, outro celular ou por outra pessoa ao mesmo tempo.\n\nPra não apagar por cima essas mudanças, a última alteração feita aqui não foi salva — o painel vai atualizar sozinho com a versão mais recente. Só é preciso repetir essa última alteração.');
-  }
   // Busca a versão mais recente automaticamente — não deixa a pessoa travada
   // esperando um F5 manual.
   carregarDoServidor();
+}
+
+// Depois de um conflito, tenta recuperar sozinho o que tinha sido CRIADO aqui e ainda
+// não tinha sido salvo: qualquer registro que existia no estado local (antes de
+// atualizar com a versão do servidor) mas cujo id não aparece na versão nova é, por
+// definição, algo novo que essa aba criou e nunca chegou a salvar — recolocamos de
+// volta no estado atual e deixamos o autosave salvar de novo. Edições em registros que
+// já existiam no servidor não são recuperadas automaticamente aqui (pra não arriscar
+// sobrescrever uma mudança mais nova feita por outra pessoa nesse mesmo registro) —
+// só criações novas, que são sempre seguras de readicionar.
+function reaplicarCriacoesNaoSalvas_(estadoAnterior){
+  var tipos = ['clientes', 'produtos', 'orcamentos', 'financeiro', 'modelosItens', 'filamentos'];
+  var recuperados = {};
+  var total = 0;
+  tipos.forEach(function(tipo){
+    var atuais = state[tipo] || [];
+    var idsAtuais = {};
+    atuais.forEach(function(item){ idsAtuais[item.id] = true; });
+    var novos = (estadoAnterior[tipo] || []).filter(function(item){ return !idsAtuais[item.id]; });
+    if(novos.length){
+      state[tipo] = atuais.concat(novos);
+      recuperados[tipo] = novos.length;
+      total += novos.length;
+    }
+  });
+  if(total > 0){
+    marcarAlterado();
+  }
+  return { total: total, recuperados: recuperados };
+}
+
+// Mostra um aviso preciso do que aconteceu depois de um conflito — em vez de sempre
+// dizer "repita sua última alteração" (que ficava errado quando mais de uma coisa
+// estava pendente, ou quando na verdade deu pra recuperar tudo sozinho).
+function avisarResultadoConflito_(resultado){
+  if(window.__avisoDadosDesatualizadosMostrado) return;
+  window.__avisoDadosDesatualizadosMostrado = true;
+  if(resultado && resultado.total > 0){
+    var partes = LIXEIRA_TIPOS
+      .filter(function(t){ return resultado.recuperados[t.tipo]; })
+      .map(function(t){ return resultado.recuperados[t.tipo] + ' ' + t.rotulo.toLowerCase() + (resultado.recuperados[t.tipo] > 1 ? '(s)' : ''); });
+    alert('Estes dados foram alterados em outro dispositivo ao mesmo tempo.\n\nO painel atualizou sozinho com a versão mais recente e recuperou automaticamente o que você tinha acabado de criar aqui e ainda não tinha sido salvo (' + partes.join(', ') + ') — está sendo salvo de novo agora. Confira se ficou tudo certo.');
+  } else {
+    alert('Estes dados foram alterados em outro dispositivo ao mesmo tempo.\n\nO painel atualizou sozinho com a versão mais recente. Se você tinha acabado de EDITAR algo aqui (não criar algo novo, e sim alterar um registro que já existia), confira se essa alteração continua certa — pode ser necessário refazê-la, porque ela não foi salva.');
+  }
 }
 
 // Nº de falhas seguidas buscando do servidor (usado só pra calcular o tempo de
@@ -279,13 +338,26 @@ function carregarDoServidor(){
       // periódica (o que resetaria filtros/scroll sem necessidade).
       const precisaAplicar = carregando || dados.revisao !== state.revisao;
       if(precisaAplicar){
+        // Se isso está vindo de um conflito (avisarDadosDesatualizados), tem uma cópia
+        // do que estava editado aqui e ainda não tinha sido salvo — depois de aplicar a
+        // versão mais nova, tenta reaplicar sozinho o que foi CRIADO (não editado) aqui.
+        const vinhaDeConflito = !!estadoAntesDoConflito;
+        const pendente = estadoAntesDoConflito;
+        estadoAntesDoConflito = null;
         state = Object.assign(estadoPadrao(), dados);
         carregando = false;
         // Qualquer bloqueio anterior por dados desatualizados fica resolvido: acabamos
         // de buscar a versão mais recente da planilha.
         bloqueadoPorConflito = false;
+        const resultadoRecuperacao = vinhaDeConflito ? reaplicarCriacoesNaoSalvas_(pendente) : null;
         renderTudo();
         salvarCacheLocal();
+        if(vinhaDeConflito) avisarResultadoConflito_(resultadoRecuperacao);
+        // Se reaplicarCriacoesNaoSalvas_ acabou de agendar um novo salvamento (achou algo
+        // pra recuperar), não mexe no status aqui — senão mostraria "salvo às ..." por
+        // cima do "salvando..." por um instante, até o salvamento de recuperação (em
+        // ~800ms) terminar de verdade e atualizar o status sozinho.
+        if(resultadoRecuperacao && resultadoRecuperacao.total > 0) return;
       }
       // Confirma "salvo às ..." mesmo quando não havia nada novo pra aplicar — é o que
       // limpa um aviso de "não foi possível atualizar" que tenha ficado de uma

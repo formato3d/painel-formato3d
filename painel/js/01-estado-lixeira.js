@@ -22,7 +22,7 @@ function estadoPadrao(){
     // responsavel é o nome que aparece assinando os recibos gerados pelo painel.
     empresa:{ nome:'FORMATO 3D', subtitulo:'Impressão e Personalizados', cnpj:'67.905.742/0001-37', whatsapp:'(92) 98632-6919', cidadePadrao:'Manaus/AM', chavePix:'+5592986326919', nomePix:'MARIANA B COUTINHO', responsavel:'Camila Barroncas dos Santos' },
     proximoNumero: 1,
-    seq:{ cliente:1, produto:1, orcamento:1, financeiro:1, modeloItem:1, filamento:1, recibo:1, parcelamento:1 },
+    seq:{ cliente:1, produto:1, orcamento:1, financeiro:1, modeloItem:1, filamento:1, recibo:1, parcelamento:1, compra:1 },
     // Número de revisão da planilha no servidor — usado só pra detectar quando esta aba
     // ficou desatualizada (outra aba/dispositivo salvou algo mais novo). Nunca editado
     // pela interface, só lido/enviado no carregar/salvar.
@@ -32,7 +32,8 @@ function estadoPadrao(){
     orcamentos: [],
     financeiro: [],
     modelosItens: [],
-    filamentos: []
+    filamentos: [],
+    compras: []
   };
 }
 let state = estadoPadrao();
@@ -71,6 +72,7 @@ function filamentosAtivos(){ return (state.filamentos || []).filter(x => !x.excl
 function orcamentosAtivos(){ return state.orcamentos.filter(x => !x.excluidoEm); }
 function financeiroAtivos(){ return state.financeiro.filter(x => !x.excluidoEm); }
 function modelosAtivos(){ return (state.modelosItens || []).filter(x => !x.excluidoEm); }
+function comprasAtivos(){ return (state.compras || []).filter(x => !x.excluidoEm); }
 
 // Descrição amigável de um item excluído pra listar na tela de Lixeira.
 function descreverItemLixeira(tipo, item){
@@ -80,6 +82,7 @@ function descreverItemLixeira(tipo, item){
   if(tipo === 'orcamentos') return 'Orçamento nº ' + String(item.numero).padStart(4,'0') + ' — ' + nomeClienteOpcional(item.clienteId);
   if(tipo === 'financeiro') return item.descricao || '(sem descrição)';
   if(tipo === 'modelosItens') return item.descricao || '(sem descrição)';
+  if(tipo === 'compras') return item.descricao || '(sem descrição)';
   return item.id;
 }
 const LIXEIRA_TIPOS = [
@@ -88,7 +91,8 @@ const LIXEIRA_TIPOS = [
   { tipo: 'filamentos', rotulo: 'Filamento' },
   { tipo: 'orcamentos', rotulo: 'Orçamento' },
   { tipo: 'financeiro', rotulo: 'Financeiro' },
-  { tipo: 'modelosItens', rotulo: 'Modelo de item' }
+  { tipo: 'modelosItens', rotulo: 'Modelo de item' },
+  { tipo: 'compras', rotulo: 'Compra' }
 ];
 function renderLixeira(){
   const corpo = document.getElementById('corpoLixeira');
@@ -269,7 +273,7 @@ function avisarDadosDesatualizados(){
 // sobrescrever uma mudança mais nova feita por outra pessoa nesse mesmo registro) —
 // só criações novas, que são sempre seguras de readicionar.
 function reaplicarCriacoesNaoSalvas_(estadoAnterior){
-  var tipos = ['clientes', 'produtos', 'orcamentos', 'financeiro', 'modelosItens', 'filamentos'];
+  var tipos = ['clientes', 'produtos', 'orcamentos', 'financeiro', 'modelosItens', 'filamentos', 'compras'];
   var recuperados = {};
   var total = 0;
   tipos.forEach(function(tipo){
@@ -426,7 +430,7 @@ function verificarAtualizacoesPeriodicamente(){
 // usuários) está aberto, ou se a pessoa está digitando em algum campo, a verificação
 // periódica espera a próxima vez.
 function existeEdicaoEmAndamento(){
-  var modais = ['usuariosWrap', 'formClienteWrap', 'formProdutoWrap', 'formFilamentoWrap', 'formOrcamentoWrap', 'modelosWrap', 'formFinanceiroWrap'];
+  var modais = ['usuariosWrap', 'formClienteWrap', 'formProdutoWrap', 'formFilamentoWrap', 'formOrcamentoWrap', 'modelosWrap', 'formFinanceiroWrap', 'formCompraWrap'];
   for(var i = 0; i < modais.length; i++){
     var el = document.getElementById(modais[i]);
     if(el && !el.classList.contains('hidden')) return true;

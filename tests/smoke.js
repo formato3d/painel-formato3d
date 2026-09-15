@@ -185,6 +185,44 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(150);
   assert(await page.evaluate((n) => state.financeiro.find(f => f.id === 'fin_ci1').reciboNumero === n, numeroReciboAntes), 'gerar o recibo de novo mantém o mesmo número (não gera um novo a cada impressão)');
 
+  console.log('Grupo: catálogo de produtos em PDF (pra mandar pro cliente)');
+  const alertaSemProdutos = await page.evaluate(() => {
+    const guardados = state.produtos;
+    state.produtos = []; // simula não ter nenhum produto cadastrado ainda
+    window.__alertaCatalogo = null;
+    const origAlert = window.alert;
+    window.alert = (msg) => { window.__alertaCatalogo = msg; };
+    gerarCatalogoPdf();
+    const ativouAreaSemProdutos = document.getElementById('printAreaCatalogo').classList.contains('ativo');
+    window.alert = origAlert;
+    state.produtos = guardados; // restaura pros próximos testes
+    return { msg: window.__alertaCatalogo, ativou: ativouAreaSemProdutos };
+  });
+  assert(!!alertaSemProdutos.msg && /nenhum produto|não há produtos/i.test(alertaSemProdutos.msg), 'sem nenhum produto cadastrado, avisa em vez de gerar um catálogo vazio');
+  assert(!alertaSemProdutos.ativou, 'não ativa a área de impressão quando não tem produto pra mostrar');
+
+  await page.evaluate(() => {
+    state.produtos.push({
+      id: uid('produto'), codigo:'CAT1', nome:'Vaso Geométrico Grande', categoria:'Decoração',
+      precoCusto:8, preco:45, unidade:'un', peso:0, quantidade:3, alertaEstoqueBaixo:1,
+      foto:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      descricao:'Vaso decorativo com padrão geométrico, acabamento fosco.'
+    });
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  await page.evaluate(() => { document.querySelectorAll('.print-area').forEach(el => el.classList.remove('ativo')); gerarCatalogoPdf(); });
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('printAreaCatalogo').classList.contains('ativo')), 'área de impressão do catálogo fica ativa ao gerar');
+  assert(await page.evaluate(() => !document.getElementById('printArea').classList.contains('ativo') && !document.getElementById('printAreaRecibo').classList.contains('ativo')), 'gerar o catálogo desativa as áreas de orçamento/recibo, pra não imprimir as duas juntas');
+  assert(await page.evaluate(() => document.getElementById('catGrid').children.length === produtosAtivos().length), 'o catálogo lista todos os produtos ativos (exclui os que estão na lixeira)');
+  assert(await page.evaluate(() => document.getElementById('catGrid').textContent.includes('Vaso Geométrico Grande')), 'nome do produto aparece no catálogo');
+  assert(await page.evaluate(() => document.getElementById('catGrid').textContent.includes('Decoração')), 'categoria do produto aparece no catálogo');
+  assert(await page.evaluate(() => document.getElementById('catGrid').textContent.includes('acabamento fosco')), 'descrição do produto aparece no catálogo');
+  assert(await page.evaluate(() => !document.getElementById('catGrid').textContent.includes('R$')), 'o catálogo não mostra preços (combinado: é vitrine, não tabela de preço)');
+  assert(await page.evaluate(() => document.querySelector('#catGrid img[alt="Vaso Geométrico Grande"]') !== null), 'foto do produto aparece no catálogo quando cadastrada');
+  assert(await page.evaluate(() => document.getElementById('catLogoImg').src === document.getElementById('poLogoImg').src && document.getElementById('catLogoImg').src.length > 0), 'catálogo usa a mesma logo da empresa usada no orçamento/recibo');
+
   console.log('Grupo: orçamento e financeiro (venda) ficam interligados');
   await page.evaluate(() => {
     state.clientes.push({id:'cli_sync_a', nome:'Cliente Sync A', telefone:'', email:'', cidade:'Manaus/AM'});
@@ -526,6 +564,37 @@ function assert(condicao, mensagem){
   await page.evaluate(() => { dirty = false; carregarDoServidor(); });
   await page.waitForTimeout(900);
   assert(await page.evaluate(() => state.clientes.find(c => c.id === 'cli_1').nome === 'ATUALIZADO POR OUTRO DISPOSITIVO'), 'assim que a edição termina de salvar (dirty=false), a próxima busca já aplica normalmente os dados mais novos do servidor');
+
+  console.log('Grupo: recuperação automática depois de um conflito (dados_desatualizados) — a causa raiz de "some alguma coisa toda vez que entro"');
+  await page.evaluate(async () => {
+    // Simula outro dispositivo criando um cliente novo direto no backend, usando a
+    // revisão que esta aba tem agora (ainda válida nesse momento — o POST vai suceder
+    // e a revisão do servidor avança, deixando a revisão desta aba desatualizada).
+    const atual = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
+    atual.clientes.push({id:'cli_outro_dispositivo', nome:'Cliente criado por OUTRO dispositivo', telefone:'', email:'', cidade:''});
+    await fetch(CONFIG.URL_API, { method:'POST', body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: atual }) });
+  });
+  const nomeClienteRecuperado = 'Cliente criado NESTA aba (não devia sumir)';
+  await page.evaluate((nome) => {
+    // Enquanto isso, esta aba — com a revisão agora desatualizada, sem saber — cria um
+    // cliente novo. É exatamente isso que reproduz o conflito: o autosave de 800ms vai
+    // tentar salvar com uma revisão velha e o backend vai recusar (dados_desatualizados).
+    state.clientes.push({id: uid('cliente'), nome, telefone:'', email:'', cidade:''});
+    marcarAlterado();
+  }, nomeClienteRecuperado);
+  // ~800ms pro autosave tentar salvar (recusado) + buscar a versão nova + reaplicar a
+  // criação sozinho + salvar de novo (mais ~800ms).
+  await page.waitForTimeout(2200);
+  assert(await page.evaluate(() => document.getElementById('statusSalvo').textContent.startsWith('salvo às')), 'depois do conflito, o painel não fica travado em "...atualizando" pra sempre — termina de recuperar sozinho e volta a mostrar "salvo às ..." (o bug era a flag "dirty" ficar travada em true, bloqueando carregarDoServidor()/a verificação periódica pra sempre até um F5 manual)');
+  assert(await page.evaluate(() => !bloqueadoPorConflito), 'o bloqueio por conflito é liberado depois que a recuperação termina');
+  assert(await page.evaluate(() => !dirty), 'a flag "dirty" não fica travada em true depois do conflito');
+  assert(await page.evaluate(() => state.clientes.some(c => c.nome === 'Cliente criado por OUTRO dispositivo')), 'a versão mais recente do servidor (criada por "outro dispositivo") foi aplicada nesta aba');
+  assert(await page.evaluate((nome) => state.clientes.some(c => c.nome === nome), nomeClienteRecuperado), 'o cliente criado NESTA aba antes do conflito ser detectado foi recuperado automaticamente — a pessoa não precisou perceber que sumiu nem refazer');
+  const clientesNoServidorFinal = await page.evaluate(async () => {
+    const dados = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
+    return dados.clientes.map(c => c.nome);
+  });
+  assert(clientesNoServidorFinal.includes('Cliente criado por OUTRO dispositivo') && clientesNoServidorFinal.includes(nomeClienteRecuperado), 'os dois clientes (o do "outro dispositivo" e o recuperado desta aba) realmente ficaram salvos no servidor — não só reapareceram na tela pra sumir de novo depois');
 
   console.log('Grupo: falha ao buscar dados não trava o painel numa tela de erro pedindo F5');
   const urlOriginal = await page.evaluate(() => CONFIG.URL_API);

@@ -476,6 +476,88 @@ function assert(condicao, mensagem){
   const cardsDashTexto = await page.evaluate(() => document.getElementById('cardsDashboard').textContent);
   assert(/Total a receber/.test(cardsDashTexto) && /Total a pagar/.test(cardsDashTexto) && /Saldo geral/.test(cardsDashTexto) && /Previsão de/.test(cardsDashTexto), 'os mesmos cards (a receber, a pagar, saldo, previsão do mês) aparecem também no Dashboard, com os mesmos rótulos do Financeiro');
 
+  console.log('Grupo: Compras (registro de gastos já realizados) e Saldo real de caixa');
+  await page.evaluate(() => mostrarAba('financeiro'));
+  await page.waitForTimeout(150);
+  await page.evaluate(() => mostrarAbaFinanceiro('compras'));
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('blocoCompras').classList.contains('hidden') === false), 'ao clicar na sub-aba "Compras", o bloco de Compras aparece');
+  assert(await page.evaluate(() => document.getElementById('blocoContasFinanceiro').classList.contains('hidden')), 'ao clicar na sub-aba "Compras", o bloco de Contas a pagar/receber fica escondido — Compras é uma seção própria, com campos próprios, não reaproveita o formulário de Financeiro');
+  assert(await page.evaluate(() => document.getElementById('subtabFinCompras').classList.contains('active')), 'a sub-aba "Compras" fica marcada como ativa');
+
+  // Cadastra uma compra pelo formulário de verdade (preenchendo os campos na tela, como a
+  // pessoa faria), pra garantir que o form e o salvarCompra() estão ligados certinho.
+  await page.evaluate(() => abrirFormCompra());
+  await page.waitForTimeout(100);
+  assert(await page.evaluate(() => !document.getElementById('formCompraWrap').classList.contains('hidden')), 'o formulário de nova compra abre');
+  await page.evaluate(() => {
+    document.getElementById('cpDescricao').value = 'Filamento PLA 1kg CI';
+    document.getElementById('cpFornecedor').value = 'Loja XYZ';
+    document.getElementById('cpCategoria').value = 'Insumos';
+    document.getElementById('cpValor').value = '150,00';
+    document.getElementById('cpData').value = hojeStr();
+    document.getElementById('cpFormaPagamento').value = 'Pix';
+    salvarCompra();
+  });
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => document.getElementById('formCompraWrap').classList.contains('hidden')), 'o formulário fecha sozinho depois de salvar');
+  assert(await page.evaluate(() => state.compras.some(c => c.descricao === 'Filamento PLA 1kg CI' && c.valor === 150 && c.fornecedor === 'Loja XYZ' && c.categoria === 'Insumos' && c.formaPagamento === 'Pix')), 'a compra criada pelo formulário fica salva no estado com todos os campos próprios (fornecedor, categoria, forma de pagamento — nada disso existe no Financeiro)');
+  const tabelaComprasTexto = await page.evaluate(() => document.getElementById('corpoTabelaCompras').textContent);
+  assert(tabelaComprasTexto.includes('Filamento PLA 1kg CI') && tabelaComprasTexto.includes('Loja XYZ'), 'a compra aparece na tabela de Compras');
+  const cardsComprasTexto = await page.evaluate(() => document.getElementById('cardsResumoCompras').textContent);
+  assert(/150,00/.test(cardsComprasTexto), 'o card "Total em compras" reflete a compra cadastrada');
+
+  // Exclusão vai pra Lixeira (soft delete), igual todo o resto do painel.
+  await page.evaluate(() => {
+    window.confirm = () => true;
+    const c = state.compras.find(x => x.descricao === 'Filamento PLA 1kg CI');
+    excluirCompra(c.id);
+  });
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => comprasAtivos().every(c => c.descricao !== 'Filamento PLA 1kg CI')), 'compra excluída some da lista de ativas');
+  assert(await page.evaluate(() => state.compras.some(c => c.descricao === 'Filamento PLA 1kg CI')), 'compra excluída continua existindo nos dados (soft delete)');
+  await page.evaluate(() => mostrarAba('lixeira'));
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('corpoLixeira').textContent.includes('Filamento PLA 1kg CI')), 'a compra excluída aparece na tela de Lixeira, igual clientes/produtos/financeiro');
+  await page.evaluate(() => {
+    const c = state.compras.find(x => x.descricao === 'Filamento PLA 1kg CI');
+    restaurarItemLixeira('compras', c.id);
+  });
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => comprasAtivos().some(c => c.descricao === 'Filamento PLA 1kg CI')), 'a compra volta a aparecer como ativa depois de restaurada da Lixeira');
+
+  // Saldo real: precisa bater com o saldo de verdade do banco — recebido (pago) menos pago
+  // (pago) menos comprado, desde o início. É o card que resolve o problema original ("saldo
+  // de 700 e pouco, mas tem compras que fiz que diminuem esse saldo").
+  await page.evaluate(() => {
+    state.financeiro.push({id:'fin_recebido_real_ci', tipo:'receber', descricao:'Venda recebida de verdade CI', valor:1000, vencimento:hojeStr(), categoria:'', clienteId:null, status:'pago'});
+    state.financeiro.push({id:'fin_pago_real_ci', tipo:'pagar', descricao:'Conta paga de verdade CI', valor:200, vencimento:hojeStr(), categoria:'', clienteId:null, status:'pago'});
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  const saldoRealInfo = await page.evaluate(() => ({
+    recebidoReal: totalRecebidoReal(),
+    pagoReal: totalPagoReal(),
+    comprasReal: totalComprasReal(),
+    saldoReal: saldoRealCaixa()
+  }));
+  assert(Math.abs(saldoRealInfo.saldoReal - (saldoRealInfo.recebidoReal - saldoRealInfo.pagoReal - saldoRealInfo.comprasReal)) < 0.001, 'saldoRealCaixa() = recebido (pago) − pago (pago) − compras, exatamente');
+  assert(saldoRealInfo.comprasReal >= 150, 'a compra registrada entra na conta do que já foi de fato gasto (totalComprasReal)');
+
+  await page.evaluate(() => mostrarAba('financeiro'));
+  await page.waitForTimeout(150);
+  await page.evaluate(() => mostrarAbaFinanceiro('pagar'));
+  await page.waitForTimeout(150);
+  const cardsFinanceiroComSaldoReal = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
+  assert(/Saldo previsto/.test(cardsFinanceiroComSaldoReal), 'o card antigo "Saldo" (só previsão de pendências) agora se chama "Saldo previsto", pra não confundir com o saldo real');
+  assert(/Saldo real/.test(cardsFinanceiroComSaldoReal), 'o novo card "Saldo real" aparece no Financeiro');
+
+  await page.evaluate(() => mostrarAba('dashboard'));
+  await page.waitForTimeout(150);
+  const cardsDashComSaldoReal = await page.evaluate(() => document.getElementById('cardsDashboard').textContent);
+  assert(/Saldo geral/.test(cardsDashComSaldoReal), 'o card "Saldo geral" do Dashboard continua existindo com o mesmo nome de sempre (não foi renomeado nem removido)');
+  assert(/Saldo real/.test(cardsDashComSaldoReal), 'o novo card "Saldo real" também aparece no Dashboard');
+
   console.log('Grupo: dashboard — contas a pagar/receber do dia');
   const doDia = await page.evaluate(() => ({
     pagarHojeTexto: document.getElementById('corpoPagarHoje').textContent,
@@ -627,6 +709,10 @@ function assert(condicao, mensagem){
     try { exportarFinanceiroExcel(); return 'sem erro'; } catch(e) { return 'ERRO: ' + e.message; }
   });
   assert(exportResult === 'sem erro', 'exportarFinanceiroExcel() não lança exceção (' + exportResult + ')');
+  const exportComprasResult = await page.evaluate(() => {
+    try { exportarComprasExcel(); return 'sem erro'; } catch(e) { return 'ERRO: ' + e.message; }
+  });
+  assert(exportComprasResult === 'sem erro', 'exportarComprasExcel() não lança exceção (' + exportComprasResult + ')');
 
   console.log('Grupo: logout invalida sessão no servidor');
   let chamouLogout = false;

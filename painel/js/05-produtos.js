@@ -171,3 +171,45 @@ function renderProdutos(){
   document.getElementById('contagemProdutos').textContent = produtosAtivos().length;
 }
 
+// Gera um catálogo em PDF com os produtos/serviços ativos, pra mandar pro cliente —
+// mesmo mecanismo de "imprimir" usado no orçamento e no recibo (preenche a área de
+// impressão e chama window.print(); a pessoa escolhe "Salvar como PDF" no diálogo do
+// navegador). De propósito SEM preço — é uma vitrine do que a loja faz, não uma
+// tabela de preços (que muda por pedido/negociação/quantidade).
+function gerarCatalogoPdf(){
+  const produtos = produtosAtivos().slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  if(produtos.length === 0){
+    alert('Não há produtos cadastrados ainda. Cadastre pelo menos um produto/serviço antes de gerar o catálogo.');
+    return;
+  }
+  document.getElementById('catLogoImg').src = document.getElementById('poLogoImg').src;
+  document.getElementById('catWhatsapp').textContent = state.empresa.whatsapp || '';
+  document.getElementById('catWhatsappRodape').textContent = state.empresa.whatsapp || '';
+  document.getElementById('catData').textContent = hojeStr();
+
+  const grid = document.getElementById('catGrid');
+  grid.innerHTML = '';
+  produtos.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'cat-item';
+    const fotoHtml = p.foto
+      ? `<img src="${p.foto}" alt="${esc(p.nome)}">`
+      : `<div class="cat-item-sem-foto">Sem foto</div>`;
+    div.innerHTML = fotoHtml + `<div class="cat-item-body">
+        <div class="cat-item-nome">${esc(p.nome)}</div>
+        ${p.categoria ? `<div class="cat-item-cat">${esc(p.categoria)}</div>` : ''}
+        ${p.descricao ? `<div class="cat-item-desc">${esc(p.descricao)}</div>` : ''}
+      </div>`;
+    grid.appendChild(div);
+  });
+
+  // Garante que só a área do catálogo fica visível na impressão — se a pessoa tinha
+  // acabado de imprimir um orçamento ou recibo antes, essas áreas ficam marcadas
+  // "ativo" e apareceriam junto se não forem limpas aqui.
+  document.getElementById('printArea').classList.remove('ativo');
+  document.getElementById('printAreaRecibo').classList.remove('ativo');
+  document.getElementById('printAreaCatalogo').classList.add('ativo');
+  document.body.classList.add('modo-impressao');
+  window.print();
+}
+

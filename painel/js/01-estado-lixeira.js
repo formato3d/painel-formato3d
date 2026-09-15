@@ -144,6 +144,19 @@ function marcarAlterado(){
   autoSaveTimer = setTimeout(salvarNoServidor, 800);
 }
 
+// Botão "💾 Salvar" ao lado do "🔄 Atualizar": força o envio imediato de tudo que está
+// registrado agora, sem esperar o debounce de 800ms do autosave — pra quem quer ter
+// certeza (visualmente) de que nada ficou pra trás antes de fechar a aba, por exemplo.
+function salvarAgora(){
+  if(configuracaoPendente()) return;
+  clearTimeout(autoSaveTimer);
+  dirty = true;
+  const el = document.getElementById('statusSalvo');
+  el.textContent = 'salvando na planilha...';
+  el.classList.add('dirty');
+  salvarNoServidor();
+}
+
 function marcarSalvo(){
   dirty = false;
   // Estado confirmado em dia com o servidor — se um novo conflito acontecer mais
@@ -430,7 +443,7 @@ function verificarAtualizacoesPeriodicamente(){
 // usuários) está aberto, ou se a pessoa está digitando em algum campo, a verificação
 // periódica espera a próxima vez.
 function existeEdicaoEmAndamento(){
-  var modais = ['usuariosWrap', 'formClienteWrap', 'formProdutoWrap', 'formFilamentoWrap', 'formOrcamentoWrap', 'modelosWrap', 'formFinanceiroWrap', 'formCompraWrap'];
+  var modais = ['usuariosWrap', 'formClienteWrap', 'formProdutoWrap', 'formFilamentoWrap', 'formOrcamentoWrap', 'modelosWrap', 'formFinanceiroWrap', 'formCompraWrap', 'confirmarPagamentoWrap'];
   for(var i = 0; i < modais.length; i++){
     var el = document.getElementById(modais[i]);
     if(el && !el.classList.contains('hidden')) return true;

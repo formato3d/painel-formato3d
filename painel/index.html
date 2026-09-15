@@ -140,6 +140,7 @@
   .top-actions button:hover{ opacity:0.88; }
   #btnTema{ font-size:15px; padding:6px 10px; line-height:1; }
   #btnAtualizarDados{ font-size:15px; padding:6px 10px; line-height:1; }
+  #btnSalvarDados{ font-size:12.5px; padding:6px 10px; line-height:1; }
   #statusSalvo{ font-size:11.5px; color:var(--gray); white-space:nowrap; }
   #statusSalvo.dirty{ color:var(--red); font-weight:bold; }
   #statusSalvo.autosave{ color:var(--green); font-weight:bold; }
@@ -699,6 +700,7 @@
   </nav>
   <div class="top-actions">
     <span id="statusSalvo">carregando...</span>
+    <button id="btnSalvarDados" onclick="salvarAgora()" title="Salvar tudo agora, sem esperar">💾 Salvar</button>
     <button id="btnAtualizarDados" onclick="atualizarAgora()" title="Buscar dados atualizados agora">🔄</button>
     <button id="btnTema" onclick="alternarTema()" title="Alternar tema claro/escuro">🌙</button>
     <button id="btnUsuarios" class="btn secondary" onclick="abrirUsuarios()" title="Gerenciar usuários com acesso ao painel">👤 Usuários</button>
@@ -1066,7 +1068,15 @@
       <div class="totais-orc" style="margin-top:14px;">
         <table>
           <tr><td class="tlabel">Frete (R$)</td><td class="tval"><input id="foFrete" value="0,00" oninput="atualizarTotalOrc()"></td></tr>
-          <tr><td class="tlabel">Desconto (R$)</td><td class="tval"><input id="foDesconto" value="0,00" oninput="atualizarTotalOrc()"></td></tr>
+          <tr><td class="tlabel">Desconto</td><td class="tval">
+            <div style="display:flex; gap:6px; justify-content:flex-end;">
+              <select id="foDescontoTipo" onchange="atualizarTotalOrc()" style="width:auto;">
+                <option value="valor">R$</option>
+                <option value="percentual">%</option>
+              </select>
+              <input id="foDesconto" value="0,00" oninput="atualizarTotalOrc()" style="max-width:110px;">
+            </div>
+          </td></tr>
           <tr class="grand"><td class="tlabel">TOTAL GERAL</td><td class="tval" id="foTotalGeral">R$ 0,00</td></tr>
         </table>
       </div>
@@ -1190,6 +1200,39 @@ Obrigado pela preferência!</textarea></div>
       <thead><tr><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Anexos</th><th></th></tr></thead>
       <tbody id="corpoTabelaFinanceiro"></tbody>
     </table>
+    </div>
+
+    <div id="confirmarPagamentoWrap" class="modal-overlay hidden" onclick="if(event.target===this) fecharConfirmarPagamento()">
+      <div class="modal-card">
+        <h3 id="confirmarPagamentoTitulo">Confirmar recebimento</h3>
+        <p class="modal-sub" id="confirmarPagamentoSub"></p>
+        <div class="form-grid">
+          <div class="field"><label>Valor (R$) *</label><input id="cfValor" oninput="atualizarPreviewDescontoConfirmarPagamento()"></div>
+          <div class="field"><label>Data do pagamento *</label><input id="cfData" placeholder="dd/mm/aaaa"></div>
+          <div class="field"><label>Forma de pagamento</label>
+            <select id="cfFormaPagamento" onchange="alternarDescontoConfirmarPagamento()">
+              <option>Pix</option>
+              <option>Dinheiro</option>
+              <option>Cartão de débito</option>
+              <option>Cartão de crédito</option>
+              <option>Boleto</option>
+              <option>Transferência</option>
+              <option>Outro</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid wide hidden" id="cfDescontoBloco">
+          <div class="field">
+            <label>Desconto da maquininha (R$)</label>
+            <input id="cfDesconto" value="0,00" oninput="atualizarPreviewDescontoConfirmarPagamento()">
+            <small id="cfDescontoPreview" class="modal-sub" style="margin:4px 0 0;"></small>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn secondary" onclick="fecharConfirmarPagamento()">Cancelar</button>
+          <button class="btn" onclick="confirmarPagamentoSalvar()">Confirmar</button>
+        </div>
+      </div>
     </div>
 
     <div id="blocoCompras" class="hidden">

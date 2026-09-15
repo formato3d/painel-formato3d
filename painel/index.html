@@ -1098,6 +1098,7 @@ Obrigado pela preferência!</textarea></div>
         <div class="subtabs" id="subtabsFinanceiro">
           <button type="button" class="subtab active" id="subtabFinPagar" onclick="mostrarAbaFinanceiro('pagar')">A pagar</button>
           <button type="button" class="subtab" id="subtabFinReceber" onclick="mostrarAbaFinanceiro('receber')">A receber</button>
+          <button type="button" class="subtab" id="subtabFinCompras" onclick="mostrarAbaFinanceiro('compras')">Compras</button>
         </div>
         <select id="filtroMesFin" onchange="renderFinanceiro()"></select>
         <select id="filtroStatusFin" onchange="renderFinanceiro()">
@@ -1112,6 +1113,7 @@ Obrigado pela preferência!</textarea></div>
       </div>
     </div>
 
+    <div id="blocoContasFinanceiro">
     <div class="cards-grid" id="cardsTipoFinanceiro" style="margin-bottom:20px;"></div>
 
     <div id="formFinanceiroWrap" class="form-card hidden">
@@ -1188,6 +1190,70 @@ Obrigado pela preferência!</textarea></div>
       <thead><tr><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Anexos</th><th></th></tr></thead>
       <tbody id="corpoTabelaFinanceiro"></tbody>
     </table>
+    </div>
+
+    <div id="blocoCompras" class="hidden">
+      <div class="cards-grid" id="cardsResumoCompras" style="margin-bottom:20px;"></div>
+
+      <div class="panel-header">
+        <div class="panel-actions">
+          <select id="filtroMesCompras" onchange="renderCompras()"></select>
+        </div>
+        <div class="panel-actions">
+          <button class="btn secondary" onclick="exportarComprasExcel()">⬇ Exportar Excel</button>
+          <button class="btn" onclick="abrirFormCompra()">+ Nova compra</button>
+        </div>
+      </div>
+
+      <div id="formCompraWrap" class="form-card hidden">
+        <h3 id="formCompraTitulo">Nova compra</h3>
+        <div class="form-grid">
+          <div class="field"><label>Descrição *</label><input id="cpDescricao" placeholder="Ex: Filamento PLA, manutenção da impressora..."></div>
+          <div class="field"><label>Fornecedor</label><input id="cpFornecedor"></div>
+          <div class="field"><label>Categoria</label><input id="cpCategoria" placeholder="Insumos, manutenção, frete..."></div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>Valor (R$) *</label><input id="cpValor" placeholder="0,00"></div>
+          <div class="field"><label>Data da compra *</label><input id="cpData" placeholder="dd/mm/aaaa"></div>
+          <div class="field"><label>Forma de pagamento</label>
+            <select id="cpFormaPagamento">
+              <option>Pix</option>
+              <option>Dinheiro</option>
+              <option>Cartão de débito</option>
+              <option>Cartão de crédito</option>
+              <option>Boleto</option>
+              <option>Transferência</option>
+              <option>Outro</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid wide">
+          <div class="field"><label>Observações</label><input id="cpObs"></div>
+        </div>
+        <div class="form-grid wide">
+          <div class="field">
+            <label>Comprovante (opcional)</label>
+            <div class="file-upload" id="cpAnexoUpload">
+              <input type="file" id="cpAnexo" accept="application/pdf,image/png,image/jpeg,image/webp" onchange="processarAnexoCompra(this)">
+              <div class="ph-txt"><b>Anexar comprovante</b><br>PDF, JPG, PNG ou WEBP até 8MB</div>
+            </div>
+            <div class="file-preview hidden" id="cpAnexoPreviewWrap">
+              <a id="cpAnexoLink" href="#" target="_blank" rel="noopener">🧾 <span id="cpAnexoNome"></span></a>
+              <button type="button" onclick="removerAnexoCompra()">Remover</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="salvarCompra()">Salvar</button>
+          <button class="btn secondary" onclick="fecharFormCompra()">Cancelar</button>
+        </div>
+      </div>
+
+      <table class="data">
+        <thead><tr><th>Descrição</th><th>Fornecedor</th><th>Categoria</th><th>Data</th><th>Valor</th><th>Forma de pagamento</th><th>Comprovante</th><th></th></tr></thead>
+        <tbody id="corpoTabelaCompras"></tbody>
+      </table>
+    </div>
   </section>
 
   <section id="tab-relatorios" class="tab-section hidden">
@@ -1361,6 +1427,7 @@ Obrigado pela preferência!</textarea></div>
 <script src="js/10-financeiro.js"></script>
 <script src="js/11-dashboard-relatorios.js"></script>
 <script src="js/12-exportar-excel.js"></script>
+<script src="js/14-compras.js"></script>
 <script src="js/13-inicializacao.js"></script>
 
 </body>

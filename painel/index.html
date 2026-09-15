@@ -489,6 +489,21 @@
   .btn-copy-pix.copiado{ background:#1a7a3d; border-color:#1a7a3d; }
   @media print{ .btn-copy-pix{ display:none; } .po-pix-copia input{ flex:1 1 100%; } }
 
+  /* ===== Catálogo de produtos (impressão/PDF para enviar ao cliente) =====
+     Sem preço de propósito — é um catálogo pra mostrar o que a loja faz, não uma
+     tabela de preços (que muda por pedido/negociação). */
+  .cat-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-top:4px; }
+  .cat-item{ border:1px solid #ccc; border-radius:6px; overflow:hidden; background:#fff; break-inside:avoid; page-break-inside:avoid; }
+  .cat-item img{ display:block; width:100%; aspect-ratio:1/1; object-fit:cover; background:#f2f2f2; }
+  .cat-item-sem-foto{ display:flex; align-items:center; justify-content:center; width:100%; aspect-ratio:1/1; background:#f2f2f2; color:#999; font-size:11.5px; text-align:center; padding:10px; }
+  .cat-item-body{ padding:8px 10px 10px; }
+  .cat-item-nome{ font-size:13px; font-weight:bold; color:#111; line-height:1.3; }
+  .cat-item-cat{ display:inline-block; margin-top:4px; font-size:10px; text-transform:uppercase; letter-spacing:0.3px; color:#2a2a72; background:#eef0fb; border-radius:3px; padding:2px 6px; }
+  .cat-item-desc{ margin-top:5px; font-size:11.5px; line-height:1.5; color:#444; }
+  .cat-rodape{ margin-top:22px; text-align:center; font-size:12px; color:#555; border-top:1px solid #ccc; padding-top:12px; }
+  @media print{ .cat-grid{ grid-template-columns:repeat(3, 1fr); } }
+  @media screen and (max-width:760px){ .cat-grid{ grid-template-columns:repeat(2, 1fr); } }
+
   /* ===== Recibo (impressão/PDF de um pagamento recebido) ===== */
   .re-valor-box{ display:flex; align-items:center; justify-content:space-between; gap:20px; border:1.5px solid #cfd3e6; border-radius:10px; background:#f7f7fb; padding:16px 20px; margin-bottom:20px; }
   .re-valor-label{ font-size:12px; color:#555; text-transform:uppercase; letter-spacing:0.06em; font-weight:bold; }
@@ -783,6 +798,7 @@
       <h2 class="section-title">Produtos e serviços <span class="count-tag">(<span id="contagemProdutos">0</span>)</span></h2>
       <div class="panel-actions">
         <input type="text" id="buscaProduto" placeholder="Buscar por nome ou código..." oninput="renderProdutos()">
+        <button class="btn secondary" onclick="gerarCatalogoPdf()">📄 Gerar catálogo</button>
         <button class="btn" onclick="abrirFormProduto()">+ Novo produto</button>
       </div>
     </div>
@@ -1305,6 +1321,30 @@ Obrigado pela preferência!</textarea></div>
     <div class="re-nome" id="reResponsavel"></div>
     <div class="re-doc" id="reAssinaturaDoc"></div>
   </div>
+</div>
+
+<!-- ============ ÁREA DE IMPRESSÃO DO CATÁLOGO DE PRODUTOS ============ -->
+<div id="printAreaCatalogo" class="print-area">
+  <div class="po-header">
+    <div class="po-header-left">
+      <img id="catLogoImg" alt="Formato 3D">
+      <div>
+        <p class="po-company-name">FORMATO 3D</p>
+        <p class="po-company-sub">Impressão e Personalizados</p>
+        <div class="po-company-info">
+          <div><b>WhatsApp:</b> <span id="catWhatsapp"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="po-header-right">
+      <div class="title">CATÁLOGO</div>
+      <div><div class="label">Data</div><div class="value" id="catData">-</div></div>
+    </div>
+  </div>
+
+  <div class="cat-grid" id="catGrid"></div>
+
+  <div class="cat-rodape">Valores e disponibilidade sob consulta — fale com a gente pelo WhatsApp <span id="catWhatsappRodape"></span>.</div>
 </div>
 
 <script src="qrcode.min.js"></script>

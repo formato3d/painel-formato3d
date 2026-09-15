@@ -51,4 +51,26 @@ function exportarFinanceiroExcel(){
   XLSX.utils.book_append_sheet(wb, ws, 'Financeiro');
   XLSX.writeFile(wb, 'financeiro_formato3d_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
+function exportarComprasExcel(){
+  if(typeof XLSX === 'undefined'){
+    alert('Não foi possível carregar a biblioteca de exportação. Verifique sua internet e tente de novo.');
+    return;
+  }
+  const linhas = comprasFiltradoAtual()
+    .map(c => ({
+      'Descrição': c.descricao || '',
+      'Fornecedor': c.fornecedor || '',
+      'Categoria': c.categoria || '',
+      'Data': c.data ? fmtDataExibir(c.data) : '',
+      'Valor (R$)': c.valor || 0,
+      'Forma de pagamento': c.formaPagamento || '',
+      'Observações': c.obs || '',
+      'Comprovante (link)': c.comprovanteUrl || ''
+    }));
+  if(linhas.length === 0){ alert('Não há compras pra exportar.'); return; }
+  const ws = XLSX.utils.json_to_sheet(linhas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Compras');
+  XLSX.writeFile(wb, 'compras_formato3d_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
 

@@ -161,14 +161,21 @@ function assert(condicao, mensagem){
     marcarAlterado();
   });
   await page.waitForTimeout(900);
+  await page.evaluate(() => { alternarStatusFinanceiro('fin_ci1'); });
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => !document.getElementById('confirmarPagamentoWrap').classList.contains('hidden')), 'clicar em confirmar (✓) numa conta a receber abre o pop-up de confirmação, em vez de marcar como pago na hora');
+  assert(await page.evaluate(() => document.getElementById('cfValor').value === '123,45'), 'o pop-up já vem preenchido com o valor da conta');
+  assert(await page.evaluate(() => document.getElementById('cfData').value === hojeStr()), 'o pop-up já vem preenchido com a data de hoje como data do pagamento');
   const respostaConfirm = await page.evaluate(() => {
     window.__confirmMsg = null;
     window.confirm = (msg) => { window.__confirmMsg = msg; return false; }; // recusa gerar o recibo dessa vez
-    alternarStatusFinanceiro('fin_ci1');
+    confirmarPagamentoSalvar();
     return window.__confirmMsg;
   });
   await page.waitForTimeout(900);
-  assert(await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_ci1').status === 'pago'), 'marcar conta a receber como paga funciona normalmente');
+  assert(await page.evaluate(() => document.getElementById('confirmarPagamentoWrap').classList.contains('hidden')), 'o pop-up fecha sozinho depois de confirmar');
+  assert(await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_ci1').status === 'pago'), 'confirmar o pagamento no pop-up marca a conta como paga');
+  assert(await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_ci1').formaPagamentoConfirmada === 'Pix'), 'a forma de pagamento escolhida no pop-up fica registrada no lançamento');
   assert(!!respostaConfirm && /recibo/i.test(respostaConfirm), 'ao confirmar pagamento de uma venda, o painel pergunta se quer gerar o recibo');
   await page.evaluate(() => mostrarAbaFinanceiro('receber')); // fin_ci1 é do tipo receber — só aparece na aba certa
   assert(await page.evaluate(() => !!document.querySelector('button[onclick*="abrirRecibo(\'fin_ci1\')"]')), 'botão de gerar recibo (🧾) aparece na linha da conta paga');
@@ -255,7 +262,8 @@ function assert(condicao, mensagem){
   // Confirma o pagamento (pago) e SÓ DEPOIS o orçamento muda de novo — não pode reescrever um pagamento já confirmado.
   await page.evaluate((id) => {
     window.confirm = () => false; // não precisa gerar recibo nesse teste
-    alternarStatusFinanceiro(id);
+    alternarStatusFinanceiro(id); // abre o pop-up, já preenchido com o valor/data/forma padrão
+    confirmarPagamentoSalvar(); // confirma com os valores padrão (mantém os R$ 180 do lançamento)
   }, finSyncId);
   await page.waitForTimeout(900);
   await page.evaluate(() => {
@@ -437,7 +445,7 @@ function assert(condicao, mensagem){
   await page.evaluate(() => { document.getElementById('filtroMesFin').value = ''; document.getElementById('filtroStatusFin').value = ''; mostrarAbaFinanceiro('pagar'); });
   await page.waitForTimeout(150);
   const cardsResumoTexto = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
-  assert(/A receber/.test(cardsResumoTexto) && /A pagar/.test(cardsResumoTexto) && /Saldo/.test(cardsResumoTexto), 'os cards do resumo (A receber, A pagar, Saldo) aparecem fixos no topo do Financeiro');
+  assert(/Saídas/.test(cardsResumoTexto) && /Recebido/.test(cardsResumoTexto) && /Saldo/.test(cardsResumoTexto), 'os 3 cards simples do resumo (Saídas, Recebido, Saldo) aparecem fixos no topo do Financeiro');
   const tabelaPagarTexto = await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent);
   assert(tabelaPagarTexto.includes('Pagar este mes CI'), 'a aba "A pagar" mostra os lançamentos do tipo pagar');
   assert(!tabelaPagarTexto.includes('Receber este mes CI'), 'a aba "A pagar" não mostra lançamentos do tipo receber');
@@ -453,18 +461,21 @@ function assert(condicao, mensagem){
   assert(!tabelaReceberTexto.includes('Pagar este mes CI'), 'a aba "A receber" não mostra lançamentos do tipo pagar');
   const cardsTipoReceberTexto = await page.evaluate(() => document.getElementById('cardsTipoFinanceiro').textContent);
   assert(/Vencidas \(a receber\)/.test(cardsTipoReceberTexto), 'o card de vencidas na aba "A receber" é específico desse tipo');
+  // Nenhuma das contas "a receber" cadastradas neste teste está paga (todas pendentes) —
+  // então elas não entram nos cards de Saídas/Recebido/Saldo, que só contam o que já é
+  // caixa de verdade (combinado com o usuário: cards simples, só do que já foi pago/recebido).
   const cardReceberTudoTexto = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
-  assert(/1\.500,00/.test(cardReceberTudoTexto), 'com "Todos os meses", o card "A receber" soma as duas contas (500 + 1000 = 1.500)');
 
-  // Filtro de mês: escolher o mês atual esconde, tanto no card quanto na tabela, a conta que
-  // só vence no mês que vem — cards e tabela mudam juntos com o mesmo filtro.
+  // Filtro de mês: escolher o mês atual esconde, na TABELA, a conta que só vence no mês que
+  // vem — mas os cards (Saídas/Recebido/Saldo) não mudam com esse filtro: eles são sempre o
+  // total real desde o início, não a previsão do período em tela.
   const chaveMesAtual = await page.evaluate(() => { const h = new Date(); return h.getFullYear() + '-' + String(h.getMonth()+1).padStart(2,'0'); });
   await page.evaluate((chave) => { document.getElementById('filtroMesFin').value = chave; renderFinanceiro(); }, chaveMesAtual);
   await page.waitForTimeout(150);
   const tabelaMesAtualTexto = await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent);
   assert(tabelaMesAtualTexto.includes('Receber este mes CI') && !tabelaMesAtualTexto.includes('Receber mes que vem CI'), 'escolhendo o mês atual no filtro, a tabela esconde a conta que só vence no mês que vem');
-  const cardReceberMesTexto = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
-  assert(/500,00/.test(cardReceberMesTexto) && !/1\.500,00/.test(cardReceberMesTexto), 'no mês atual, o card "A receber" soma só R$ 500 (não os R$ 1.500 de todos os meses)');
+  const cardsResumoComFiltroMesTexto = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
+  assert(cardsResumoComFiltroMesTexto === cardReceberTudoTexto, 'os cards de Saídas/Recebido/Saldo não mudam quando o filtro de mês da tabela muda — são sempre o total real desde o início, não uma previsão do período em tela');
 
   await page.evaluate(() => { document.getElementById('filtroMesFin').value = ''; renderFinanceiro(); });
   await page.waitForTimeout(150);
@@ -474,7 +485,7 @@ function assert(condicao, mensagem){
   await page.evaluate(() => mostrarAba('dashboard'));
   await page.waitForTimeout(150);
   const cardsDashTexto = await page.evaluate(() => document.getElementById('cardsDashboard').textContent);
-  assert(/Total a receber/.test(cardsDashTexto) && /Total a pagar/.test(cardsDashTexto) && /Saldo geral/.test(cardsDashTexto) && /Previsão de/.test(cardsDashTexto), 'os mesmos cards (a receber, a pagar, saldo, previsão do mês) aparecem também no Dashboard, com os mesmos rótulos do Financeiro');
+  assert(/Saídas/.test(cardsDashTexto) && /Recebido/.test(cardsDashTexto) && /Saldo/.test(cardsDashTexto), 'os mesmos 3 cards simples (Saídas, Recebido, Saldo) aparecem também no Dashboard, com os mesmos rótulos do Financeiro');
 
   console.log('Grupo: Compras (registro de gastos já realizados) e Saldo real de caixa');
   await page.evaluate(() => mostrarAba('financeiro'));
@@ -548,15 +559,135 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(150);
   await page.evaluate(() => mostrarAbaFinanceiro('pagar'));
   await page.waitForTimeout(150);
-  const cardsFinanceiroComSaldoReal = await page.evaluate(() => document.getElementById('cardsResumoFinanceiro').textContent);
-  assert(/Saldo previsto/.test(cardsFinanceiroComSaldoReal), 'o card antigo "Saldo" (só previsão de pendências) agora se chama "Saldo previsto", pra não confundir com o saldo real');
-  assert(/Saldo real/.test(cardsFinanceiroComSaldoReal), 'o novo card "Saldo real" aparece no Financeiro');
+  const cardsFinanceiroComSaldoReal = await page.evaluate(() => {
+    const saidas = totalSaidasReal(), recebido = totalRecebidoReal(), saldo = saldoRealCaixa();
+    return {
+      texto: document.getElementById('cardsResumoFinanceiro').textContent,
+      saidasTexto: 'R$ ' + fmtMoeda(saidas),
+      recebidoTexto: 'R$ ' + fmtMoeda(recebido),
+      saldoTexto: 'R$ ' + fmtMoeda(saldo)
+    };
+  });
+  assert(/Saídas/.test(cardsFinanceiroComSaldoReal.texto) && /Recebido/.test(cardsFinanceiroComSaldoReal.texto) && /Saldo/.test(cardsFinanceiroComSaldoReal.texto), 'os 3 cards simples (Saídas, Recebido, Saldo) continuam aparecendo no Financeiro depois de cadastrar compras e pagamentos reais');
+  assert(cardsFinanceiroComSaldoReal.texto.includes(cardsFinanceiroComSaldoReal.saidasTexto), 'o card "Saídas" do Financeiro bate exatamente com totalSaidasReal() (contas pagas + compras)');
+  assert(cardsFinanceiroComSaldoReal.texto.includes(cardsFinanceiroComSaldoReal.recebidoTexto), 'o card "Recebido" do Financeiro bate exatamente com totalRecebidoReal()');
+  assert(cardsFinanceiroComSaldoReal.texto.includes(cardsFinanceiroComSaldoReal.saldoTexto), 'o card "Saldo" do Financeiro bate exatamente com saldoRealCaixa() (recebido menos saídas — é o card que resolve o "saldo que some" sem as compras aparecerem em lugar nenhum)');
 
   await page.evaluate(() => mostrarAba('dashboard'));
   await page.waitForTimeout(150);
-  const cardsDashComSaldoReal = await page.evaluate(() => document.getElementById('cardsDashboard').textContent);
-  assert(/Saldo geral/.test(cardsDashComSaldoReal), 'o card "Saldo geral" do Dashboard continua existindo com o mesmo nome de sempre (não foi renomeado nem removido)');
-  assert(/Saldo real/.test(cardsDashComSaldoReal), 'o novo card "Saldo real" também aparece no Dashboard');
+  const cardsDashComSaldoReal = await page.evaluate(() => {
+    const saidas = totalSaidasReal(), recebido = totalRecebidoReal(), saldo = saldoRealCaixa();
+    return {
+      texto: document.getElementById('cardsDashboard').textContent,
+      saidasTexto: 'R$ ' + fmtMoeda(saidas),
+      recebidoTexto: 'R$ ' + fmtMoeda(recebido),
+      saldoTexto: 'R$ ' + fmtMoeda(saldo)
+    };
+  });
+  assert(/Saídas/.test(cardsDashComSaldoReal.texto) && /Recebido/.test(cardsDashComSaldoReal.texto) && /Saldo/.test(cardsDashComSaldoReal.texto), 'os mesmos 3 cards simples (Saídas, Recebido, Saldo) aparecem também no Dashboard');
+  assert(cardsDashComSaldoReal.texto.includes(cardsDashComSaldoReal.saidasTexto) && cardsDashComSaldoReal.texto.includes(cardsDashComSaldoReal.recebidoTexto) && cardsDashComSaldoReal.texto.includes(cardsDashComSaldoReal.saldoTexto), 'os valores dos cards do Dashboard batem com os mesmos totais reais do Financeiro (a mesma fonte de verdade nas duas telas)');
+
+  console.log('Grupo: desconto do orçamento (valor fixo em R$ ou percentual, à escolha)');
+  await page.evaluate(() => mostrarAba('orcamentos'));
+  await page.waitForTimeout(150);
+  await page.evaluate(() => abrirFormOrcamento());
+  await page.waitForTimeout(150);
+  await page.evaluate(() => {
+    document.getElementById('foCliente').value = state.clientes[0].id;
+    document.querySelector('#corpoItensOrc .it-desc').value = 'Item desconto CI';
+    document.querySelector('#corpoItensOrc .it-qtd').value = '1';
+    document.querySelector('#corpoItensOrc .it-valor').value = '200,00';
+    document.getElementById('foDescontoTipo').value = 'valor';
+    document.getElementById('foDesconto').value = '50,00';
+    atualizarTotalOrc();
+  });
+  assert(await page.evaluate(() => document.getElementById('foTotalGeral').textContent === 'R$ 150,00'), 'desconto em R$ fixo é subtraído direto do total dos itens (200 - 50 = 150)');
+  await page.evaluate(() => {
+    document.getElementById('foDescontoTipo').value = 'percentual';
+    document.getElementById('foDesconto').value = '10';
+    atualizarTotalOrc();
+  });
+  assert(await page.evaluate(() => document.getElementById('foTotalGeral').textContent === 'R$ 180,00'), 'desconto em % é calculado sobre a soma dos itens (10% de 200 = 20, total 180)');
+  await page.evaluate(() => salvarOrcamento());
+  await page.waitForTimeout(900);
+  const orcDescontoId = await page.evaluate(() => state.orcamentos.slice().reverse().find(o => o.itens.some(it => it.descricao === 'Item desconto CI')).id);
+  const orcDesconto = await page.evaluate((id) => {
+    const o = state.orcamentos.find(x => x.id === id);
+    return { desconto: o.desconto, descontoTipo: o.descontoTipo, descontoInformado: o.descontoInformado, total: o.total };
+  }, orcDescontoId);
+  assert(Math.abs(orcDesconto.desconto - 20) < 0.001, 'o orçamento salvo guarda o desconto já convertido pra R$ (10% de 200 = 20), pra continuar funcionando no WhatsApp/impressão/Excel, que esperam um valor final em R$');
+  assert(orcDesconto.descontoTipo === 'percentual' && orcDesconto.descontoInformado === 10, 'o orçamento também guarda o tipo escolhido e o número exatamente como foi digitado (percentual, 10)');
+  assert(orcDesconto.total === 180, 'o total do orçamento salvo reflete o desconto percentual calculado (200 - 20 = 180)');
+  await page.evaluate((id) => abrirFormOrcamento(id), orcDescontoId);
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('foDescontoTipo').value === 'percentual' && document.getElementById('foDesconto').value === '10,00'), 'reabrir um orçamento com desconto em % mostra o toggle em "%" e o número original digitado (10) — não o valor em R$ já convertido');
+  await page.evaluate(() => fecharFormOrcamento());
+
+  console.log('Grupo: pop-up de confirmação de pagamento — desconto da maquininha (cartão de crédito)');
+  await page.evaluate(() => mostrarAba('financeiro'));
+  await page.waitForTimeout(150);
+  await page.evaluate(() => {
+    const clienteId = state.clientes[0].id;
+    state.financeiro.push({id:'fin_maquininha_ci', tipo:'receber', descricao:'Venda maquininha CI', valor:300, vencimento:hojeStr(), categoria:'', clienteId, status:'pendente'});
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  await page.evaluate(() => { alternarStatusFinanceiro('fin_maquininha_ci'); });
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('cfDescontoBloco').classList.contains('hidden')), 'o campo de desconto da maquininha começa escondido (forma de pagamento padrão do pop-up é Pix)');
+  await page.evaluate(() => { document.getElementById('cfFormaPagamento').value = 'Cartão de crédito'; alternarDescontoConfirmarPagamento(); });
+  assert(await page.evaluate(() => !document.getElementById('cfDescontoBloco').classList.contains('hidden')), 'escolher "Cartão de crédito" numa conta a receber mostra o campo de desconto da maquininha');
+  await page.evaluate(() => {
+    document.getElementById('cfDesconto').value = '9,00';
+    atualizarPreviewDescontoConfirmarPagamento();
+  });
+  assert(await page.evaluate(() => document.getElementById('cfDescontoPreview').textContent.includes('291,00')), 'a prévia mostra o valor líquido que vai entrar no Saldo real (300 - 9 = 291)');
+  await page.evaluate(() => confirmarPagamentoSalvar());
+  await page.waitForTimeout(900);
+  const finMaquininha = await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_maquininha_ci'));
+  assert(finMaquininha.status === 'pago' && finMaquininha.valor === 291, 'o valor líquido (já com a taxa da maquininha descontada) é o que fica registrado como recebido — combinado com o usuário: o pop-up registra o valor líquido, não o valor cheio');
+  assert(finMaquininha.descontoMaquininha === 9 && finMaquininha.valorOriginal === 300, 'o painel guarda o desconto aplicado e o valor original da conta, pra poder desfazer se precisar');
+  await page.evaluate(() => alternarStatusFinanceiro('fin_maquininha_ci')); // desfazer (↺): volta pendente, sem pop-up
+  await page.waitForTimeout(900);
+  const finMaquininhaDesfeito = await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_maquininha_ci'));
+  assert(finMaquininhaDesfeito.status === 'pendente' && finMaquininhaDesfeito.valor === 300 && finMaquininhaDesfeito.valorOriginal === undefined, 'desfazer (↺) uma conta paga volta pro valor original da conta, sem deixar resíduo do desconto da maquininha');
+
+  await page.evaluate(() => {
+    state.financeiro.push({id:'fin_pagar_cartao_ci', tipo:'pagar', descricao:'Conta a pagar no cartão CI', valor:80, vencimento:hojeStr(), categoria:'', clienteId:null, status:'pendente'});
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  await page.evaluate(() => { alternarStatusFinanceiro('fin_pagar_cartao_ci'); });
+  await page.waitForTimeout(150);
+  await page.evaluate(() => { document.getElementById('cfFormaPagamento').value = 'Cartão de crédito'; alternarDescontoConfirmarPagamento(); });
+  assert(await page.evaluate(() => document.getElementById('cfDescontoBloco').classList.contains('hidden')), 'numa conta a PAGAR, o campo de desconto da maquininha não aparece mesmo escolhendo "Cartão de crédito" (esse desconto só faz sentido pra dinheiro entrando, numa conta a receber)');
+  await page.evaluate(() => fecharConfirmarPagamento());
+  assert(await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_pagar_cartao_ci').status === 'pendente'), 'cancelar o pop-up (sem confirmar) não muda o status da conta');
+  // Limpa os lançamentos deste grupo (iam sujar o quadro "vence hoje" do próximo grupo de testes).
+  await page.evaluate(() => {
+    ['fin_maquininha_ci', 'fin_pagar_cartao_ci'].forEach(id => {
+      const f = state.financeiro.find(x => x.id === id);
+      if(f) moverParaLixeira(f);
+    });
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+
+  console.log('Grupo: botão "Salvar" (💾) força salvar imediatamente, sem esperar o autosave de 800ms');
+  await page.evaluate(() => {
+    state.clientes.push({id: uid('cliente'), nome: 'Cliente Salvar Agora CI', telefone:'', email:'', cidade:''});
+    dirty = true;
+    salvarAgora();
+  });
+  const textoLogoAposSalvarAgora = await page.evaluate(() => document.getElementById('statusSalvo').textContent);
+  assert(/salvando/i.test(textoLogoAposSalvarAgora), 'clicar em "Salvar" já mostra "salvando..." na hora, sem esperar o debounce normal de 800ms do autosave');
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => document.getElementById('statusSalvo').textContent.startsWith('salvo às')), 'depois de salvarAgora(), o painel confirma que salvou');
+  const clientesNoServidorSalvarAgora = await page.evaluate(async () => {
+    const dados = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
+    return dados.clientes.map(c => c.nome);
+  });
+  assert(clientesNoServidorSalvarAgora.includes('Cliente Salvar Agora CI'), 'o botão "Salvar" realmente grava no servidor na hora, sem esperar nem perder a informação que já estava registrada');
 
   console.log('Grupo: dashboard — contas a pagar/receber do dia');
   const doDia = await page.evaluate(() => ({

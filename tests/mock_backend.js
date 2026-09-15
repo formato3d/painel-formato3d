@@ -11,8 +11,9 @@ function criarMockBackend(porta){
     financeiro: [],
     modelosItens: [],
     filamentos: [],
+    compras: [],
     proximoNumero: 1,
-    seq: {cliente:2, produto:1, orcamento:1, financeiro:1}
+    seq: {cliente:2, produto:1, orcamento:1, financeiro:1, compra:1}
   };
   let revisao = 1;
 
@@ -43,8 +44,9 @@ function criarMockBackend(porta){
           financeiro: st.financeiro || [],
           modelosItens: st.modelosItens || [],
           filamentos: st.filamentos || [],
+          compras: st.compras || [],
           proximoNumero: st.proximoNumero || 1,
-          seq: st.seq || {cliente:1, produto:1, orcamento:1, financeiro:1}
+          seq: st.seq || {cliente:1, produto:1, orcamento:1, financeiro:1, compra:1}
         };
         revisao += 1;
         res.end(JSON.stringify({ok:true, salvoEm: new Date().toISOString(), revisao}));

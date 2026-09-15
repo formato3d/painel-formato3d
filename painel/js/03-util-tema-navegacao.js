@@ -176,6 +176,7 @@ function renderTudo(){
   renderFilamentos();
   renderOrcamentos();
   renderFinanceiro();
+  renderCompras();
   renderDashboard();
   renderLixeira();
   atualizarSelectsClientes();

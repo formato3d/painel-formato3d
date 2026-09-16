@@ -487,11 +487,18 @@ function sincronizarFinanceiroComOrcamento(o){
 // true quando um lançamento "a receber" vinculado a um orçamento já foi pago, mas o
 // orçamento mudou depois (valor ou cliente diferente do que foi cobrado) — como pagamentos
 // confirmados não são sobrescritos automaticamente, isso pede uma checada manual.
+// Valor "bruto" recebido — o valor que de fato bate com o total do orçamento, somando
+// de volta o desconto da maquininha (se teve) ao valor líquido guardado em f.valor.
+// Sem isso, toda venda confirmada no cartão de crédito com desconto ficava marcada como
+// "orçamento mudou" à toa, já que o líquido nunca bate sozinho com o total do orçamento.
+function valorBrutoRecebido(f){
+  return (f.valor || 0) + (f.descontoMaquininha || 0);
+}
 function financeiroDessincronizado(f){
   if(!f.orcamentoId || f.status !== 'pago') return false;
   const o = state.orcamentos.find(x => x.id === f.orcamentoId);
   if(!o || o.excluidoEm) return false;
-  return f.valor !== o.total || f.clienteId !== o.clienteId;
+  return Math.round(valorBrutoRecebido(f) * 100) !== Math.round(o.total * 100) || f.clienteId !== o.clienteId;
 }
 // Botão "🔄" que aparece junto do aviso "orçamento mudou": corrige manualmente um lançamento
 // já pago pra bater com o orçamento vinculado. Diferente de sincronizarFinanceiroComOrcamento
@@ -505,18 +512,21 @@ function atualizarFinanceiroComOrcamento(financeiroId){
     alert('O orçamento vinculado a este lançamento não foi encontrado — pode ter sido excluído.');
     return;
   }
-  const mudaValor = f.valor !== o.total;
+  const brutoAtual = valorBrutoRecebido(f);
+  const mudaValor = Math.round(brutoAtual * 100) !== Math.round(o.total * 100);
   const mudaCliente = f.clienteId !== o.clienteId;
   if(!mudaValor && !mudaCliente) return;
   const linhas = [];
-  if(mudaValor) linhas.push('Valor: R$ ' + fmtMoeda(f.valor) + ' → R$ ' + fmtMoeda(o.total));
+  if(mudaValor) linhas.push('Valor: R$ ' + fmtMoeda(brutoAtual) + ' → R$ ' + fmtMoeda(o.total) + (f.descontoMaquininha ? ' (o desconto da maquininha de R$ ' + fmtMoeda(f.descontoMaquininha) + ' continua sendo descontado)' : ''));
   if(mudaCliente) linhas.push('Cliente: ' + (nomeClienteOpcional(f.clienteId) || '(nenhum)') + ' → ' + (nomeClienteOpcional(o.clienteId) || '(nenhum)'));
   const confirmou = confirm(
     'Atualizar este lançamento pra bater com o orçamento nº ' + o.numero + '?\n\n' + linhas.join('\n') +
     '\n\nEssa conta já está marcada como paga/recebida — só confirme se o valor recebido de verdade mudou.'
   );
   if(!confirmou) return;
-  f.valor = o.total;
+  // Mantém o desconto da maquininha já aplicado: o que muda é o valor bruto do
+  // orçamento, o valor líquido recebido continua sendo o bruto novo menos esse desconto.
+  f.valor = Math.max(0, o.total - (f.descontoMaquininha || 0));
   f.clienteId = o.clienteId;
   marcarAlterado();
   renderFinanceiro();

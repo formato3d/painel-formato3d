@@ -634,6 +634,11 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(900);
   await page.evaluate(() => { alternarStatusFinanceiro('fin_maquininha_ci'); });
   await page.waitForTimeout(150);
+  // Clicar fora do card (na área escura ao redor) não pode fechar o pop-up — é fácil clicar
+  // sem querer em cima da tabela do Financeiro atrás dele e perder o que já foi preenchido.
+  await page.evaluate(() => document.getElementById('confirmarPagamentoWrap').click());
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => !document.getElementById('confirmarPagamentoWrap').classList.contains('hidden')), 'clicar fora do card (na área escura) não fecha o pop-up de confirmação de pagamento — só fecha pelo "Cancelar" ou confirmando');
   assert(await page.evaluate(() => document.getElementById('cfDescontoBloco').classList.contains('hidden')), 'o campo de desconto da maquininha começa escondido (forma de pagamento padrão do pop-up é Pix)');
   await page.evaluate(() => { document.getElementById('cfFormaPagamento').value = 'Cartão de crédito'; alternarDescontoConfirmarPagamento(); });
   assert(await page.evaluate(() => !document.getElementById('cfDescontoBloco').classList.contains('hidden')), 'escolher "Cartão de crédito" numa conta a receber mostra o campo de desconto da maquininha');

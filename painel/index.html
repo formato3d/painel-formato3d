@@ -1202,7 +1202,10 @@ Obrigado pela preferência!</textarea></div>
     </table>
     </div>
 
-    <div id="confirmarPagamentoWrap" class="modal-overlay hidden" onclick="if(event.target===this) fecharConfirmarPagamento()">
+    <!-- Sem fechar ao clicar fora: é fácil clicar sem querer aqui em cima da tabela do
+         Financeiro e perder o valor/desconto que já tinha preenchido no pop-up. Só fecha
+         pelo "Cancelar" ou confirmando o pagamento (ver fecharConfirmarPagamento()). -->
+    <div id="confirmarPagamentoWrap" class="modal-overlay hidden">
       <div class="modal-card">
         <h3 id="confirmarPagamentoTitulo">Confirmar recebimento</h3>
         <p class="modal-sub" id="confirmarPagamentoSub"></p>

@@ -652,6 +652,61 @@ function assert(condicao, mensagem){
   const finMaquininhaDesfeito = await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_maquininha_ci'));
   assert(finMaquininhaDesfeito.status === 'pendente' && finMaquininhaDesfeito.valor === 300 && finMaquininhaDesfeito.valorOriginal === undefined, 'desfazer (↺) uma conta paga volta pro valor original da conta, sem deixar resíduo do desconto da maquininha');
 
+  // Regressão relatada pelo usuário: uma venda vinculada a um orçamento (ex: R$ 60), confirmada
+  // no cartão de crédito com desconto da maquininha (ex: R$ 1,85 → R$ 58,15 recebido), NÃO pode
+  // ficar marcada como "orçamento mudou" só porque o valor líquido não bate sozinho com o total
+  // bruto do orçamento — o desconto é legítimo, não um desencontro de verdade.
+  await page.evaluate(() => {
+    const o = {
+      id:'orc_maquininha_sync', numero: state.proximoNumero, clienteId: state.clientes[0].id, data: hojeStr(), validadeDias:'7',
+      status:'Aprovado', frete:0, desconto:0, total:60, obs:'', financeiroGerado:false, estoqueBaixado:true,
+      condicaoPagamento:'', formasPagamento:['Cartão de crédito'], itens:[{ produtoId:null, cod:'', descricao:'Item maquininha sync', qtd:1, valorUnit:60, custoUnit:0 }]
+    };
+    state.orcamentos.push(o);
+    state.proximoNumero++;
+    gerarContaReceber('orc_maquininha_sync');
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  const finMaquininhaSyncId = await page.evaluate(() => state.financeiro.find(f => f.orcamentoId === 'orc_maquininha_sync').id);
+  await page.evaluate((id) => {
+    window.confirm = () => false; // não precisa gerar recibo nesse teste
+    alternarStatusFinanceiro(id); // abre o pop-up já preenchido com os R$ 60 do orçamento
+    document.getElementById('cfFormaPagamento').value = 'Cartão de crédito';
+    alternarDescontoConfirmarPagamento();
+    document.getElementById('cfDesconto').value = '1,85';
+    atualizarPreviewDescontoConfirmarPagamento();
+    confirmarPagamentoSalvar();
+  }, finMaquininhaSyncId);
+  await page.waitForTimeout(900);
+  const finMaquininhaSync = await page.evaluate((id) => state.financeiro.find(f => f.id === id), finMaquininhaSyncId);
+  assert(Math.abs(finMaquininhaSync.valor - 58.15) < 0.001 && finMaquininhaSync.descontoMaquininha === 1.85, 'venda vinculada a orçamento confirmada no cartão registra o valor líquido (60 - 1,85 = 58,15)');
+  assert(await page.evaluate((id) => financeiroDessincronizado(state.financeiro.find(f => f.id === id)) === false, finMaquininhaSyncId), 'BUG CORRIGIDO: o desconto da maquininha não marca mais a venda como "orçamento mudou" à toa (o valor bruto reconstituído bate com o total do orçamento)');
+  await page.evaluate(() => mostrarAbaFinanceiro('receber'));
+  assert(await page.evaluate((id) => !document.getElementById('financeiro-linha-' + id).innerHTML.includes('orçamento mudou'), finMaquininhaSyncId), 'a linha da venda no cartão com desconto não mostra o aviso de "orçamento mudou" na tabela do Financeiro');
+
+  // Se o orçamento mudar de verdade depois (não é só o desconto), o aviso ainda tem que
+  // aparecer, e o botão de atualizar (🔄) tem que continuar descontando a taxa da maquininha.
+  await page.evaluate(() => {
+    const o = state.orcamentos.find(x => x.id === 'orc_maquininha_sync');
+    o.total = 120;
+    marcarAlterado();
+  });
+  assert(await page.evaluate((id) => financeiroDessincronizado(state.financeiro.find(f => f.id === id)) === true, finMaquininhaSyncId), 'se o orçamento mudar de verdade depois do pagamento no cartão, o aviso de desencontro continua funcionando (compara o bruto reconstituído, não o líquido puro)');
+  await page.evaluate((id) => {
+    window.__confirmMsgMaquininha = null;
+    window.confirm = (msg) => { window.__confirmMsgMaquininha = msg; return true; };
+    atualizarFinanceiroComOrcamento(id);
+  }, finMaquininhaSyncId);
+  await page.waitForTimeout(150);
+  const confirmMsgMaquininha = await page.evaluate(() => window.__confirmMsgMaquininha);
+  // O "de" mostrado é o valor BRUTO reconstituído (líquido 58,15 + desconto 1,85 = 60,00,
+  // que é exatamente o total antigo do orçamento) — não o valor líquido recebido.
+  assert(!!confirmMsgMaquininha && confirmMsgMaquininha.includes('60,00') && confirmMsgMaquininha.includes('120,00') && confirmMsgMaquininha.includes('desconto da maquininha'), 'a pergunta de atualizar mostra o valor bruto (não o líquido) de/para, e avisa que o desconto da maquininha continua sendo descontado');
+  const finMaquininhaSyncAtualizado = await page.evaluate((id) => state.financeiro.find(f => f.id === id), finMaquininhaSyncId);
+  assert(Math.abs(finMaquininhaSyncAtualizado.valor - 118.15) < 0.001, 'depois de atualizar pro novo total do orçamento, o valor líquido registrado continua descontando a taxa da maquininha (120 - 1,85 = 118,15)');
+  assert(await page.evaluate((id) => financeiroDessincronizado(state.financeiro.find(f => f.id === id)) === false, finMaquininhaSyncId), 'depois de atualizar, a venda não fica mais marcada como desencontrada');
+
   await page.evaluate(() => {
     state.financeiro.push({id:'fin_pagar_cartao_ci', tipo:'pagar', descricao:'Conta a pagar no cartão CI', valor:80, vencimento:hojeStr(), categoria:'', clienteId:null, status:'pendente'});
     marcarAlterado();
@@ -664,13 +719,13 @@ function assert(condicao, mensagem){
   await page.evaluate(() => fecharConfirmarPagamento());
   assert(await page.evaluate(() => state.financeiro.find(f => f.id === 'fin_pagar_cartao_ci').status === 'pendente'), 'cancelar o pop-up (sem confirmar) não muda o status da conta');
   // Limpa os lançamentos deste grupo (iam sujar o quadro "vence hoje" do próximo grupo de testes).
-  await page.evaluate(() => {
-    ['fin_maquininha_ci', 'fin_pagar_cartao_ci'].forEach(id => {
+  await page.evaluate((idSync) => {
+    ['fin_maquininha_ci', 'fin_pagar_cartao_ci', idSync].forEach(id => {
       const f = state.financeiro.find(x => x.id === id);
       if(f) moverParaLixeira(f);
     });
     marcarAlterado();
-  });
+  }, finMaquininhaSyncId);
   await page.waitForTimeout(900);
 
   console.log('Grupo: botão "Salvar" (💾) força salvar imediatamente, sem esperar o autosave de 800ms');

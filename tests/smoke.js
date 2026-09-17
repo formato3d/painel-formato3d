@@ -841,36 +841,114 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(900);
   assert(await page.evaluate(() => state.clientes.find(c => c.id === 'cli_1').nome === 'ATUALIZADO POR OUTRO DISPOSITIVO'), 'assim que a edição termina de salvar (dirty=false), a próxima busca já aplica normalmente os dados mais novos do servidor');
 
-  console.log('Grupo: recuperação automática depois de um conflito (dados_desatualizados) — a causa raiz de "some alguma coisa toda vez que entro"');
+  console.log('Grupo: mesclagem por registro — dois aparelhos ao mesmo tempo não apagam o trabalho um do outro (a causa raiz de "ela salva lá e eu salvo aqui e sempre algo se perde")');
+
+  // Sub-teste 1: registros DIFERENTES criados ao mesmo tempo por dois aparelhos — os
+  // dois têm que sobreviver. "Outro dispositivo" manda direto pro backend um DELTA de
+  // verdade (só o registro que ele criou, não o estado inteiro) — é assim que o painel
+  // de verdade manda também (ver calcularAlteracoes_/salvarNoServidor no Code.gs).
   await page.evaluate(async () => {
-    // Simula outro dispositivo criando um cliente novo direto no backend, usando a
-    // revisão que esta aba tem agora (ainda válida nesse momento — o POST vai suceder
-    // e a revisão do servidor avança, deixando a revisão desta aba desatualizada).
-    const atual = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
-    atual.clientes.push({id:'cli_outro_dispositivo', nome:'Cliente criado por OUTRO dispositivo', telefone:'', email:'', cidade:''});
-    await fetch(CONFIG.URL_API, { method:'POST', body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: atual }) });
+    await fetch(CONFIG.URL_API, {
+      method:'POST',
+      body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: {
+        clientes: [{id:'cli_outro_dispositivo', nome:'Cliente criado por OUTRO dispositivo', telefone:'', email:'', cidade:''}]
+      }})
+    });
   });
-  const nomeClienteRecuperado = 'Cliente criado NESTA aba (não devia sumir)';
+  const nomeClienteNestaAba = 'Cliente criado NESTA aba ao mesmo tempo';
   await page.evaluate((nome) => {
-    // Enquanto isso, esta aba — com a revisão agora desatualizada, sem saber — cria um
-    // cliente novo. É exatamente isso que reproduz o conflito: o autosave de 800ms vai
-    // tentar salvar com uma revisão velha e o backend vai recusar (dados_desatualizados).
+    // Nesta aba, sem saber do que o outro aparelho acabou de salvar, cria um cliente
+    // novo — diferente do que o outro criou.
     state.clientes.push({id: uid('cliente'), nome, telefone:'', email:'', cidade:''});
     marcarAlterado();
-  }, nomeClienteRecuperado);
-  // ~800ms pro autosave tentar salvar (recusado) + buscar a versão nova + reaplicar a
-  // criação sozinho + salvar de novo (mais ~800ms).
-  await page.waitForTimeout(2200);
-  assert(await page.evaluate(() => document.getElementById('statusSalvo').textContent.startsWith('salvo às')), 'depois do conflito, o painel não fica travado em "...atualizando" pra sempre — termina de recuperar sozinho e volta a mostrar "salvo às ..." (o bug era a flag "dirty" ficar travada em true, bloqueando carregarDoServidor()/a verificação periódica pra sempre até um F5 manual)');
-  assert(await page.evaluate(() => !bloqueadoPorConflito), 'o bloqueio por conflito é liberado depois que a recuperação termina');
-  assert(await page.evaluate(() => !dirty), 'a flag "dirty" não fica travada em true depois do conflito');
-  assert(await page.evaluate(() => state.clientes.some(c => c.nome === 'Cliente criado por OUTRO dispositivo')), 'a versão mais recente do servidor (criada por "outro dispositivo") foi aplicada nesta aba');
-  assert(await page.evaluate((nome) => state.clientes.some(c => c.nome === nome), nomeClienteRecuperado), 'o cliente criado NESTA aba antes do conflito ser detectado foi recuperado automaticamente — a pessoa não precisou perceber que sumiu nem refazer');
-  const clientesNoServidorFinal = await page.evaluate(async () => {
+  }, nomeClienteNestaAba);
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => document.getElementById('statusSalvo').textContent.startsWith('salvo às')), 'o salvamento desta aba termina normalmente — sem nenhum aviso de erro/conflito — mesmo com outro aparelho tendo salvado um registro diferente pouco antes');
+  assert(await page.evaluate((nome) => state.clientes.some(c => c.nome === nome), nomeClienteNestaAba), 'o cliente criado NESTA aba continua no estado depois de salvar');
+  await page.evaluate(() => carregarDoServidor());
+  await page.waitForTimeout(900);
+  assert(await page.evaluate(() => state.clientes.some(c => c.nome === 'Cliente criado por OUTRO dispositivo')), 'depois de atualizar, o cliente criado pelo OUTRO dispositivo aparece nesta aba também — o salvamento desta aba não apagou o registro dele');
+  assert(await page.evaluate((nome) => state.clientes.some(c => c.nome === nome), nomeClienteNestaAba), 'o cliente criado NESTA aba continua existindo depois de aplicar a versão mesclada do servidor — nenhum dos dois se perdeu');
+  const clientesNoServidor1 = await page.evaluate(async () => {
     const dados = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
     return dados.clientes.map(c => c.nome);
   });
-  assert(clientesNoServidorFinal.includes('Cliente criado por OUTRO dispositivo') && clientesNoServidorFinal.includes(nomeClienteRecuperado), 'os dois clientes (o do "outro dispositivo" e o recuperado desta aba) realmente ficaram salvos no servidor — não só reapareceram na tela pra sumir de novo depois');
+  assert(clientesNoServidor1.includes('Cliente criado por OUTRO dispositivo') && clientesNoServidor1.includes(nomeClienteNestaAba), 'os dois clientes realmente ficaram salvos no servidor ao mesmo tempo — nenhum sobrescreveu o outro (isso é o que resolve a perda de dados relatada)');
+
+  // Sub-teste 2: o MESMO registro editado nos dois lados ao mesmo tempo — o único caso
+  // que ainda tem um risco residual (bem menor que antes): quem salva por último "ganha"
+  // aquele registro inteiro, mas só esse — o resto continua intacto. Documentamos esse
+  // comportamento aqui em vez de fingir que ele não existe.
+  const cli1Antes = await page.evaluate(() => JSON.parse(JSON.stringify(state.clientes.find(c => c.id === 'cli_1'))));
+  await page.evaluate(async (cliente) => {
+    // "Outro dispositivo" muda a cidade do MESMO cliente (cli_1).
+    await fetch(CONFIG.URL_API, {
+      method:'POST',
+      body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: {
+        clientes: [Object.assign({}, cliente, {cidade:'Cidade mudada por OUTRO dispositivo'})]
+      }})
+    });
+  }, cli1Antes);
+  await page.evaluate(() => {
+    // Nesta aba, sem saber da mudança do outro aparelho, mexe num campo diferente do
+    // MESMO cliente e salva por último.
+    state.clientes.find(c => c.id === 'cli_1').telefone = 'TELEFONE MUDADO NESTA aba';
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  const cli1Final = await page.evaluate(() => state.clientes.find(c => c.id === 'cli_1'));
+  assert(cli1Final.telefone === 'TELEFONE MUDADO NESTA aba', 'a edição desta aba, que salvou por último, foi mantida no registro');
+  assert(cli1Final.cidade !== 'Cidade mudada por OUTRO dispositivo', 'RISCO RESIDUAL DOCUMENTADO: quando os dois aparelhos editam exatamente o MESMO registro ao mesmo tempo, quem salva por último leva o registro inteiro — a mudança de cidade do outro aparelho não sobrevive junto (diferente de antes, isso não trava nem apaga nenhum OUTRO registro, fica isolado só nesse cabo a cabo específico)');
+  assert(await page.evaluate(() => state.clientes.some(c => c.nome === 'Cliente criado por OUTRO dispositivo')), 'mesmo nesse cabo a cabo pelo mesmo registro, o cliente do sub-teste anterior (um registro diferente) continua intacto');
+
+  console.log('Grupo: contadores (seq) nunca regridem mesmo se um aparelho desatualizado mandar um valor mais baixo');
+  const seqAntes = await page.evaluate(async () => {
+    const dados = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
+    return dados.seq;
+  });
+  await page.evaluate(async () => {
+    // Simula um aparelho que ficou off-line um tempo mandando um contador de cliente
+    // bem menor do que o que o servidor já tem.
+    await fetch(CONFIG.URL_API, { method:'POST', body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: { seq: { cliente: 1 } } }) });
+  });
+  const seqDepois = await page.evaluate(async () => {
+    const dados = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
+    return dados.seq;
+  });
+  assert(seqDepois.cliente >= seqAntes.cliente, 'o contador de cliente nunca regride mesmo recebendo um valor mais baixo de um aparelho desatualizado (evita reaproveitar um id de cliente que já existe)');
+
+  console.log('Grupo: dois orçamentos com o mesmo número (dois aparelhos geraram o mesmo número antes de sincronizar) são corrigidos automaticamente, sem ficar duplicado');
+  const numeroAntes = await page.evaluate(async () => {
+    const dados = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
+    return dados.proximoNumero;
+  });
+  await page.evaluate(async (numero) => {
+    const base = { clienteId: state.clientes[0].id, data: hojeStr(), validadeDias:'7', status:'Pendente', frete:0, desconto:0, total:100, obs:'', financeiroGerado:false, condicaoPagamento:'', formasPagamento:[], itens:[] };
+    await fetch(CONFIG.URL_API, {
+      method:'POST',
+      body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: {
+        orcamentos: [
+          Object.assign({id:'orc_duplicado_a', numero}, base),
+          Object.assign({id:'orc_duplicado_b', numero}, base)
+        ],
+        proximoNumero: Number(numero) + 1
+      }})
+    });
+  }, numeroAntes);
+  const orcamentosServidor = await page.evaluate(async () => {
+    const dados = await fetch(CONFIG.URL_API + '?token=' + encodeURIComponent(CONFIG.TOKEN) + '&sessao=' + encodeURIComponent(sessaoAtual())).then(r => r.json());
+    return dados.orcamentos.filter(o => o.id === 'orc_duplicado_a' || o.id === 'orc_duplicado_b').map(o => o.numero);
+  });
+  assert(orcamentosServidor.length === 2 && orcamentosServidor[0] !== orcamentosServidor[1], 'quando dois orçamentos chegam com o mesmo número, o servidor renumera automaticamente um deles em vez de deixar dois orçamentos duplicados com o mesmo número');
+
+  console.log('Grupo: uid() não gera ids repetidos mesmo criando vários registros na mesma fração de segundo (evita um aparelho engolir o registro do outro numa mesclagem por id)');
+  const idsGerados = await page.evaluate(() => {
+    const ids = [];
+    for(let i=0;i<200;i++) ids.push(uid('cliente'));
+    return ids;
+  });
+  const idsUnicos = new Set(idsGerados);
+  assert(idsUnicos.size === idsGerados.length, 'todos os ' + idsGerados.length + ' ids gerados em sequência rápida são únicos, mesmo boa parte tendo o mesmo carimbo de tempo');
 
   console.log('Grupo: falha ao buscar dados não trava o painel numa tela de erro pedindo F5');
   const urlOriginal = await page.evaluate(() => CONFIG.URL_API);

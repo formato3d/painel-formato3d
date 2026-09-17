@@ -23,9 +23,12 @@ function estadoPadrao(){
     empresa:{ nome:'FORMATO 3D', subtitulo:'Impressão e Personalizados', cnpj:'67.905.742/0001-37', whatsapp:'(92) 98632-6919', cidadePadrao:'Manaus/AM', chavePix:'+5592986326919', nomePix:'MARIANA B COUTINHO', responsavel:'Camila Barroncas dos Santos' },
     proximoNumero: 1,
     seq:{ cliente:1, produto:1, orcamento:1, financeiro:1, modeloItem:1, filamento:1, recibo:1, parcelamento:1, compra:1 },
-    // Número de revisão da planilha no servidor — usado só pra detectar quando esta aba
-    // ficou desatualizada (outra aba/dispositivo salvou algo mais novo). Nunca editado
-    // pela interface, só lido/enviado no carregar/salvar.
+    // Número de revisão da planilha no servidor — usado só pra saber se algo mudou
+    // desde a última vez que verificamos (evita re-renderizar a lista toda a cada
+    // verificação periódica de 15s quando ninguém salvou nada de novo). Não trava
+    // mais salvamento nenhum: quem garante que ninguém perde edição é a mesclagem por
+    // registro (ver calcularAlteracoes_/salvarNoServidor). Nunca editado pela
+    // interface, só lido/enviado no carregar/salvar.
     revisao: 0,
     clientes: [],
     produtos: [],
@@ -40,19 +43,54 @@ let state = estadoPadrao();
 let dirty = false;
 let carregando = true;
 let autoSaveTimer = null;
-// Fica true quando o servidor recusa um salvamento por a página estar desatualizada
-// (outra aba/dispositivo salvou algo mais novo nesse meio-tempo) — trava novos
-// salvamentos automáticos até a pessoa recarregar a página, pra não arriscar
-// sobrescrever por cima do que foi salvo depois.
-let bloqueadoPorConflito = false;
-// Guarda uma cópia do estado local (ainda não salvo) no momento de um conflito, pra
-// tentar recuperar sozinho o que tinha sido criado aqui — ver reaplicarCriacoesNaoSalvas_.
-let estadoAntesDoConflito = null;
+// Última cópia do estado que veio do servidor (ou que o servidor confirmou como
+// mesclada, depois de um salvamento) — é contra ISSO que a gente compara pra saber o
+// que ESTE aparelho de fato criou ou alterou desde a última sincronização (ver
+// calcularAlteracoes_). Só o que mudou desde essa cópia é enviado ao salvar; tudo o
+// mais fica intacto, não importa se outro aparelho mudou aquilo nesse meio-tempo —
+// é essa separação que permite duas pessoas usando o painel ao mesmo tempo sem uma
+// apagar o que a outra acabou de salvar.
+let stateBaseline = null;
 
 function uid(tipo){
   const n = state.seq[tipo] || 1;
   state.seq[tipo] = n + 1;
-  return tipo.slice(0,3) + '_' + n;
+  // O contador (n) sozinho já bastava quando só um aparelho por vez mexia nos dados.
+  // Agora que o salvamento mescla por id (ver calcularAlteracoes_/aplicarEstadoMesclado_)
+  // em vez de sobrescrever tudo, dois aparelhos criando um registro ao mesmo tempo sem
+  // saber um do outro podiam gerar o MESMO id (ex.: os dois com seq.cliente = 5 geram
+  // "cli_5") — e um dos dois registros sumiria, mesclado por engano em cima do outro.
+  // Juntar um pedaço do horário (em base36) com uma parte aleatória deixa a chance de
+  // colisão desprezível, mesmo com dois aparelhos criando ao mesmo tempo.
+  return tipo.slice(0,3) + '_' + n + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+// Compara dois valores por CONTEÚDO (não por referência) — usado por calcularAlteracoes_
+// pra saber se um registro realmente mudou desde a última sincronização, sem depender da
+// ordem em que as chaves de um objeto foram criadas (o que JSON.stringify não garante).
+function igual_(a, b){
+  if(a === b) return true;
+  if(typeof a !== typeof b || a === null || b === null) return false;
+  if(typeof a !== 'object') return false;
+  if(Array.isArray(a) !== Array.isArray(b)) return false;
+  const chavesA = Object.keys(a), chavesB = Object.keys(b);
+  if(chavesA.length !== chavesB.length) return false;
+  return chavesA.every(k => igual_(a[k], b[k]));
+}
+
+// Devolve só os registros de state[tipo] que são NOVOS (não existiam na última
+// sincronização) ou que mudaram de conteúdo desde então — é só isso que precisa ser
+// mandado ao servidor num salvamento (ver salvarNoServidor). Antes de existir essa
+// separação, TODO salvamento mandava a lista inteira de cada tipo, e se outra pessoa
+// tivesse alterado um desses registros nesse meio-tempo, essa alteração dela sumia
+// (sobrescrita pela cópia antiga que este aparelho ainda tinha na tela).
+function calcularAlteracoes_(tipo){
+  const atuais = state[tipo] || [];
+  if(!stateBaseline) return atuais.slice(); // ainda não sincronizou nenhuma vez — manda tudo
+  const base = stateBaseline[tipo] || [];
+  const basePorId = {};
+  base.forEach(item => { basePorId[item.id] = item; });
+  return atuais.filter(item => !igual_(basePorId[item.id], item));
 }
 
 /* =========================================================
@@ -135,7 +173,7 @@ function restaurarItemLixeira(tipo, id){
 }
 
 function marcarAlterado(){
-  if(carregando || bloqueadoPorConflito) return;
+  if(carregando) return;
   dirty = true;
   const el = document.getElementById('statusSalvo');
   el.textContent = 'salvando na planilha...';
@@ -159,9 +197,6 @@ function salvarAgora(){
 
 function marcarSalvo(){
   dirty = false;
-  // Estado confirmado em dia com o servidor — se um novo conflito acontecer mais
-  // tarde, o aviso deve poder aparecer de novo.
-  window.__avisoDadosDesatualizadosMostrado = false;
   const el = document.getElementById('statusSalvo');
   const agora = new Date();
   el.textContent = 'salvo às ' + String(agora.getHours()).padStart(2,'0') + ':' + String(agora.getMinutes()).padStart(2,'0');
@@ -220,18 +255,33 @@ function sessaoInvalida(erro){
   return erro === 'não autenticado' || erro === 'sessão expirada' || erro === 'sessão inválida';
 }
 
+// Tipos de lista sincronizados com o servidor (mesma lista usada pra montar o
+// salvamento e pra aplicar o que o servidor devolve de volta).
+const TIPOS_SINCRONIZADOS = ['clientes', 'produtos', 'orcamentos', 'financeiro', 'modelosItens', 'filamentos', 'compras'];
+
 function salvarNoServidor(){
   if(configuracaoPendente()) return;
+  // Manda só o que ESTE aparelho criou ou alterou desde a última sincronização (ver
+  // calcularAlteracoes_) — nunca mais a lista inteira de cada tipo. É isso que permite
+  // duas pessoas usando o painel ao mesmo tempo em aparelhos diferentes sem uma apagar
+  // o que a outra acabou de salvar: o servidor mescla cada registro pelo próprio id
+  // (ver salvarTudo/mesclarArrayPorId_ no Code.gs), então só existe risco de verdade
+  // se as duas mexerem EXATAMENTE no mesmo registro ao mesmo tempo.
+  const alteracoes = {};
+  TIPOS_SINCRONIZADOS.forEach(tipo => { alteracoes[tipo] = calcularAlteracoes_(tipo); });
+  alteracoes.proximoNumero = state.proximoNumero;
+  alteracoes.seq = state.seq;
   fetch(CONFIG.URL_API, {
     method: 'POST',
-    body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: JSON.parse(JSON.stringify(state)) })
+    body: JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: alteracoes })
   })
     .then(r => r.json())
     .then(resp => {
       if(sessaoInvalida(resp.erro)){ voltarParaLogin('Sua sessão expirou — faça login novamente.'); return; }
-      if(resp.erro === 'dados_desatualizados'){ avisarDadosDesatualizados(); return; }
       if(resp.erro) throw new Error(resp.erro);
-      state.revisao = resp.revisao;
+      // O servidor devolve o estado inteiro já mesclado (com o que outra pessoa possa
+      // ter salvado nesse meio-tempo incluído) — aplica isso como a nova verdade.
+      aplicarEstadoMesclado_(resp);
       marcarSalvo();
       salvarCacheLocal();
     })
@@ -243,83 +293,20 @@ function salvarNoServidor(){
     });
 }
 
-// Chamado quando o servidor recusa salvar por causa de uma revisão desatualizada —
-// ou seja, essa aba carregou os dados antes de alguém (outra aba, outro celular, outro
-// usuário) ter salvo algo mais novo. Em vez de arriscar sobrescrever esses dados mais
-// novos, avisamos e buscamos a versão atual sozinhos (sem precisar de F5). Com a
-// verificação periódica (iniciarVerificacaoPeriodica) isso deve ficar raro — só
-// acontece se duas edições caírem quase ao mesmo tempo, antes da próxima verificação
-// automática.
-function avisarDadosDesatualizados(){
-  clearTimeout(autoSaveTimer);
-  bloqueadoPorConflito = true;
-  // Guarda o que estava editado aqui (ainda não salvo) pra tentar recuperar
-  // automaticamente depois de atualizar com a versão mais nova — ver
-  // reaplicarCriacoesNaoSalvas_ logo abaixo.
-  if(!estadoAntesDoConflito){
-    estadoAntesDoConflito = JSON.parse(JSON.stringify(state));
-  }
-  // IMPORTANTE: o salvamento que acabou de ser recusado já terminou (com erro) — a
-  // flag "dirty" não pode continuar travada em true, senão carregarDoServidor() (chamado
-  // logo abaixo) se recusa a aplicar os dados mais novos (ver "if(dirty) return" lá
-  // embaixo), e a verificação periódica de 15s também fica bloqueada PRA SEMPRE
-  // (verificarAtualizacoesPeriodicamente também checa "dirty"). Sem esta linha, o painel
-  // ficava preso mostrando dados velhos até a pessoa dar F5 na mão — e tudo que tinha
-  // sido criado aqui nesse meio-tempo nunca chegava a ser salvo de novo, sumindo
-  // silenciosamente. Essa era a causa principal de orçamentos/lançamentos financeiros
-  // "desaparecendo" mesmo depois do aviso de conflito aparecer.
-  dirty = false;
-  const el = document.getElementById('statusSalvo');
-  el.textContent = 'dados desatualizados — atualizando...';
-  el.classList.add('dirty');
-  // Busca a versão mais recente automaticamente — não deixa a pessoa travada
-  // esperando um F5 manual.
-  carregarDoServidor();
-}
-
-// Depois de um conflito, tenta recuperar sozinho o que tinha sido CRIADO aqui e ainda
-// não tinha sido salvo: qualquer registro que existia no estado local (antes de
-// atualizar com a versão do servidor) mas cujo id não aparece na versão nova é, por
-// definição, algo novo que essa aba criou e nunca chegou a salvar — recolocamos de
-// volta no estado atual e deixamos o autosave salvar de novo. Edições em registros que
-// já existiam no servidor não são recuperadas automaticamente aqui (pra não arriscar
-// sobrescrever uma mudança mais nova feita por outra pessoa nesse mesmo registro) —
-// só criações novas, que são sempre seguras de readicionar.
-function reaplicarCriacoesNaoSalvas_(estadoAnterior){
-  var tipos = ['clientes', 'produtos', 'orcamentos', 'financeiro', 'modelosItens', 'filamentos', 'compras'];
-  var recuperados = {};
-  var total = 0;
-  tipos.forEach(function(tipo){
-    var atuais = state[tipo] || [];
-    var idsAtuais = {};
-    atuais.forEach(function(item){ idsAtuais[item.id] = true; });
-    var novos = (estadoAnterior[tipo] || []).filter(function(item){ return !idsAtuais[item.id]; });
-    if(novos.length){
-      state[tipo] = atuais.concat(novos);
-      recuperados[tipo] = novos.length;
-      total += novos.length;
-    }
-  });
-  if(total > 0){
-    marcarAlterado();
-  }
-  return { total: total, recuperados: recuperados };
-}
-
-// Mostra um aviso preciso do que aconteceu depois de um conflito — em vez de sempre
-// dizer "repita sua última alteração" (que ficava errado quando mais de uma coisa
-// estava pendente, ou quando na verdade deu pra recuperar tudo sozinho).
-function avisarResultadoConflito_(resultado){
-  if(window.__avisoDadosDesatualizadosMostrado) return;
-  window.__avisoDadosDesatualizadosMostrado = true;
-  if(resultado && resultado.total > 0){
-    var partes = LIXEIRA_TIPOS
-      .filter(function(t){ return resultado.recuperados[t.tipo]; })
-      .map(function(t){ return resultado.recuperados[t.tipo] + ' ' + t.rotulo.toLowerCase() + (resultado.recuperados[t.tipo] > 1 ? '(s)' : ''); });
-    alert('Estes dados foram alterados em outro dispositivo ao mesmo tempo.\n\nO painel atualizou sozinho com a versão mais recente e recuperou automaticamente o que você tinha acabado de criar aqui e ainda não tinha sido salvo (' + partes.join(', ') + ') — está sendo salvo de novo agora. Confira se ficou tudo certo.');
-  } else {
-    alert('Estes dados foram alterados em outro dispositivo ao mesmo tempo.\n\nO painel atualizou sozinho com a versão mais recente. Se você tinha acabado de EDITAR algo aqui (não criar algo novo, e sim alterar um registro que já existia), confira se essa alteração continua certa — pode ser necessário refazê-la, porque ela não foi salva.');
-  }
+// Aplica um estado vindo do servidor (de um carregamento OU da resposta de um
+// salvamento, que agora também devolve o estado mesclado) como a nova referência:
+// atualiza a "baseline" (contra a qual calcularAlteracoes_ compara pra saber o que
+// mudou) e, se não tiver uma edição pendente (dirty) nesse meio-tempo, também troca o
+// que está na tela pela versão mais atual. Se a pessoa mexeu em mais alguma coisa
+// enquanto o servidor respondia, não troca a tela agora (perderia o que ela acabou de
+// digitar) — o próprio autosave que já está agendado cuida de mandar isso daqui a
+// pouco, comparando com a baseline que acabamos de atualizar.
+function aplicarEstadoMesclado_(dados){
+  stateBaseline = JSON.parse(JSON.stringify(dados));
+  if(dirty) return;
+  state = Object.assign(estadoPadrao(), dados);
+  carregando = false;
+  renderTudo();
 }
 
 // Nº de falhas seguidas buscando do servidor (usado só pra calcular o tempo de
@@ -355,26 +342,8 @@ function carregarDoServidor(){
       // periódica (o que resetaria filtros/scroll sem necessidade).
       const precisaAplicar = carregando || dados.revisao !== state.revisao;
       if(precisaAplicar){
-        // Se isso está vindo de um conflito (avisarDadosDesatualizados), tem uma cópia
-        // do que estava editado aqui e ainda não tinha sido salvo — depois de aplicar a
-        // versão mais nova, tenta reaplicar sozinho o que foi CRIADO (não editado) aqui.
-        const vinhaDeConflito = !!estadoAntesDoConflito;
-        const pendente = estadoAntesDoConflito;
-        estadoAntesDoConflito = null;
-        state = Object.assign(estadoPadrao(), dados);
-        carregando = false;
-        // Qualquer bloqueio anterior por dados desatualizados fica resolvido: acabamos
-        // de buscar a versão mais recente da planilha.
-        bloqueadoPorConflito = false;
-        const resultadoRecuperacao = vinhaDeConflito ? reaplicarCriacoesNaoSalvas_(pendente) : null;
-        renderTudo();
+        aplicarEstadoMesclado_(dados);
         salvarCacheLocal();
-        if(vinhaDeConflito) avisarResultadoConflito_(resultadoRecuperacao);
-        // Se reaplicarCriacoesNaoSalvas_ acabou de agendar um novo salvamento (achou algo
-        // pra recuperar), não mexe no status aqui — senão mostraria "salvo às ..." por
-        // cima do "salvando..." por um instante, até o salvamento de recuperação (em
-        // ~800ms) terminar de verdade e atualizar o status sozinho.
-        if(resultadoRecuperacao && resultadoRecuperacao.total > 0) return;
       }
       // Confirma "salvo às ..." mesmo quando não havia nada novo pra aplicar — é o que
       // limpa um aviso de "não foi possível atualizar" que tenha ficado de uma

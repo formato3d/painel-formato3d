@@ -955,7 +955,7 @@
     </table>
   </section>
 
-    <!-- ============ CALCULADORA 3D ============ -->
+      <!-- ============ CALCULADORA 3D ============ -->
   <section id="tab-calc3d" class="tab-section hidden">
     <div class="panel-header">
       <h2 class="section-title">🧮 Calculadora 3D</h2>
@@ -1012,7 +1012,14 @@
           </div>
           <div class="field"><label>Consumo médio estimado (W)</label><input id="calcConsumo" type="number" min="0" step="1" value="150" oninput="calcularOrcamento3D()"></div>
         </div>
-        <div class="calc-note">⚠ Consumo (W), valor da impressora e vida útil são estimativas — confira o manual, a etiqueta ou a nota fiscal da sua máquina pra um preço mais preciso. A depreciação por hora é sempre calculada a partir do valor da impressora e da vida útil, nunca digitada direto.</div>
+        <div class="form-row-2">
+          <div class="field"><label>Sua hora de trabalho (R$/hora)</label><input id="calcMaoDeObraHora" placeholder="R$ 0,00" value="0,00" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Horas de mão de obra (modelagem, pós-processamento)</label><input id="calcHorasMaoDeObra" type="number" min="0" step="0.1" value="0" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Taxa de perdas/refugo (%)</label><input id="calcTaxaPerda" type="number" min="0" max="95" step="1" value="0" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="calc-note">⚠ Consumo (W), valor da impressora e vida útil são estimativas — confira o manual, a etiqueta ou a nota fiscal da sua máquina pra um preço mais preciso. A depreciação por hora é sempre calculada a partir do valor da impressora e da vida útil, nunca digitada direto. Mão de obra e taxa de perdas/refugo são opcionais (ficam zeradas por padrão) — preencha se quiser embutir seu tempo de trabalho e o custo de impressões que falham no preço final.</div>
       </div>
 
       <div class="calc-result">
@@ -1021,6 +1028,8 @@
         <div class="calc-linha"><span>Custo de energia</span><span id="calcOutEnergia">R$ 0,00</span></div>
         <div class="calc-linha"><span>Embalagem</span><span id="calcOutEmbalagem">R$ 0,00</span></div>
         <div class="calc-linha"><span>Depreciação da impressora</span><span id="calcOutDesgaste">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Mão de obra</span><span id="calcOutMaoDeObra">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Perdas/refugo</span><span id="calcOutPerdas">R$ 0,00</span></div>
         <div class="calc-linha destaque"><span>Custo total por peça</span><span id="calcOutCustoTotal">R$ 0,00</span></div>
         <div class="calc-linha"><span>Markup aplicado</span><span id="calcOutMarkup">0%</span></div>
         <div class="calc-linha"><span>Lucro por peça</span><span id="calcOutLucro">R$ 0,00</span></div>

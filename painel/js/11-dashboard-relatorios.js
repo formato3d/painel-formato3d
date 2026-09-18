@@ -34,7 +34,7 @@ function renderDashboard(){
   venc.forEach(({f}) => {
     const vencido = estaVencido(f);
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${esc(f.descricao)}</td><td><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'Pagar' : 'Receber'}</span></td><td>${esc(nomeClienteOpcional(f.clienteId))}</td><td style="${vencido?'color:#c0392b;font-weight:bold;':''}">${fmtDataExibir(f.vencimento)}</td><td>R$ ${fmtMoeda(f.valor)}</td>`;
+    tr.innerHTML = `<td data-label="Descrição">${esc(f.descricao)}</td><td data-label="Tipo"><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'Pagar' : 'Receber'}</span></td><td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td><td data-label="Vencimento" style="${vencido?'color:#c0392b;font-weight:bold;':''}">${fmtDataExibir(f.vencimento)}</td><td data-label="Valor">R$ ${fmtMoeda(f.valor)}</td>`;
     corpoVenc.appendChild(tr);
   });
 
@@ -43,7 +43,7 @@ function renderDashboard(){
   corpoOrc.innerHTML = ultimos.length === 0 ? '<tr class="empty-row"><td colspan="4">Nenhum orçamento ainda.</td></tr>' : '';
   ultimos.forEach(o => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${esc(o.numero)}</td><td>${esc(nomeCliente(o.clienteId))}</td><td>R$ ${fmtMoeda(o.total)}</td><td>${badgeStatusOrc(o.status)}</td>`;
+    tr.innerHTML = `<td data-label="Nº">${esc(o.numero)}</td><td data-label="Cliente">${esc(nomeCliente(o.clienteId))}</td><td data-label="Total">R$ ${fmtMoeda(o.total)}</td><td data-label="Status">${badgeStatusOrc(o.status)}</td>`;
     corpoOrc.appendChild(tr);
   });
 
@@ -76,7 +76,7 @@ function renderQuadroContasDoDia(tipo, idSubtitulo, idCorpo, mensagemVazio){
   corpo.innerHTML = lista.length === 0 ? `<tr class="empty-row"><td colspan="3">${mensagemVazio}</td></tr>` : '';
   lista.forEach(f => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${esc(f.descricao)}</td><td>${esc(nomeClienteOpcional(f.clienteId))}</td><td>R$ ${fmtMoeda(f.valor)}</td>`;
+    tr.innerHTML = `<td data-label="Descrição">${esc(f.descricao)}</td><td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td><td data-label="Valor">R$ ${fmtMoeda(f.valor)}</td>`;
     corpo.appendChild(tr);
   });
 }
@@ -113,8 +113,8 @@ function renderOrcamentosParados(){
   parados.forEach(({o, dias}) => {
     const grave = dias >= 10;
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${esc(o.numero)}</td><td>${esc(nomeCliente(o.clienteId))}</td><td>R$ ${fmtMoeda(o.total)}</td>
-      <td><span class="badge ${grave ? 'vencido' : 'pendente'}">${dias} dia${dias > 1 ? 's' : ''}</span></td>
+    tr.innerHTML = `<td data-label="Nº">${esc(o.numero)}</td><td data-label="Cliente">${esc(nomeCliente(o.clienteId))}</td><td data-label="Valor">R$ ${fmtMoeda(o.total)}</td>
+      <td data-label="Parado há"><span class="badge ${grave ? 'vencido' : 'pendente'}">${dias} dia${dias > 1 ? 's' : ''}</span></td>
       <td class="acoes">
         <button class="btn-icon" onclick="imprimirOrcamento('${o.id}')" title="Imprimir / PDF">🖨</button>
         <button class="btn-icon" onclick="enviarOrcamentoWhatsApp('${o.id}')" title="Cobrar retorno pelo WhatsApp">📲</button>
@@ -198,4 +198,3 @@ function renderRelatorios(){
     ? top.map(p => barraHtml(p.nome + ' (' + p.qtd + ')', p.receita, maxReceita, 'var(--navy)', x => 'R$ ' + fmtMoeda(x))).join('')
     : '<p style="color:var(--gray)">Nenhuma venda aprovada/concluída ainda.</p>';
 }
-

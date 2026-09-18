@@ -41,11 +41,28 @@ function calcularOrcamento3D(){
   const comissao = Math.min(95, Math.max(0, parseFloat(document.getElementById('calcComissao').value) || 0));
   const consumoW = parseFloat(document.getElementById('calcConsumo').value) || 0;
 
+  // Mão de obra: tempo de modelagem, acompanhamento e pós-processamento (lixar, tirar
+  // suporte, pintar etc.) não é a mesma coisa que o tempo de impressão em si — por isso é
+  // um campo à parte, não reaproveita as horas de impressão usadas em energia/depreciação.
+  const valorHoraMaoDeObra = parseMoeda(document.getElementById('calcMaoDeObraHora').value);
+  const horasMaoDeObra = Math.max(0, parseFloat(document.getElementById('calcHorasMaoDeObra').value) || 0);
+  const custoMaoDeObra = valorHoraMaoDeObra * horasMaoDeObra;
+
   const custoFilamento = pesoKg * precoFilamentoKg;
   const kWhConsumido = (consumoW / 1000) * horasTotais;
   const custoEnergia = kWhConsumido * precoKwh;
   const custoDesgaste = depreciacaoPorHora * horasTotais;
-  const custoTotal = custoFilamento + custoEnergia + embalagem + custoDesgaste;
+  const custoFabricacao = custoFilamento + custoEnergia + embalagem + custoDesgaste + custoMaoDeObra;
+
+  // Taxa de perdas/refugo: nem toda impressão dá certo. Se X% das tentativas falham (peça
+  // empenou, faltou filamento, entupiu o bico etc.), o custo de UMA peça que efetivamente
+  // vira produto vendável precisa embutir o custo das tentativas que falharam no caminho —
+  // por isso o custo de fabricação é "engordado" dividindo por (1 - taxaPerda/100), o
+  // mesmo princípio matemático usado mais abaixo pra comissão do cartão. Com taxaPerda=0
+  // (padrão), custoTotal fica igual a custoFabricacao, sem nenhuma mudança de comportamento.
+  const taxaPerda = Math.min(95, Math.max(0, parseFloat(document.getElementById('calcTaxaPerda').value) || 0));
+  const custoTotal = taxaPerda < 100 ? custoFabricacao / (1 - taxaPerda / 100) : custoFabricacao;
+  const custoPerdas = custoTotal - custoFabricacao;
 
   // MARKUP: percentual aplicado sobre o CUSTO pra chegar no preço base (ver item 7 da
   // explicação na tela — markup e margem de lucro NÃO são a mesma coisa).
@@ -72,6 +89,8 @@ function calcularOrcamento3D(){
   document.getElementById('calcOutEnergia').textContent = 'R$ ' + fmtMoeda(custoEnergia);
   document.getElementById('calcOutEmbalagem').textContent = 'R$ ' + fmtMoeda(embalagem);
   document.getElementById('calcOutDesgaste').textContent = 'R$ ' + fmtMoeda(custoDesgaste);
+  document.getElementById('calcOutMaoDeObra').textContent = 'R$ ' + fmtMoeda(custoMaoDeObra);
+  document.getElementById('calcOutPerdas').textContent = 'R$ ' + fmtMoeda(custoPerdas);
   document.getElementById('calcOutCustoTotal').textContent = 'R$ ' + fmtMoeda(custoTotal);
   document.getElementById('calcOutMarkup').textContent = fmtMoeda(markup).replace(/,00$/, '') + '%';
   document.getElementById('calcOutLucro').textContent = 'R$ ' + fmtMoeda(lucro);

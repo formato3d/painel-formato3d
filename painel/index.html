@@ -955,7 +955,7 @@
     </table>
   </section>
 
-      <!-- ============ CALCULADORA 3D ============ -->
+            <!-- ============ CALCULADORA 3D ============ -->
   <section id="tab-calc3d" class="tab-section hidden">
     <div class="panel-header">
       <h2 class="section-title">🧮 Calculadora 3D</h2>
@@ -967,7 +967,11 @@
         <h3>Dados da peça</h3>
         <div class="form-row-2">
           <div class="field"><label>Nome da peça</label><input id="calcNome" placeholder="Ex: Vaso decorativo" oninput="calcularOrcamento3D()"></div>
-          <div class="field"><label>Qtd</label><input id="calcQtd" type="number" min="1" step="1" value="1" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Qtd no pedido</label><input id="calcQtd" type="number" min="1" step="1" value="1" oninput="calcularOrcamento3D()"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label><input type="checkbox" id="calcEhLote" onchange="toggleCampoLote(); calcularOrcamento3D()" style="width:auto; margin-right:6px; vertical-align:middle;"> É um lote de impressão (várias peças na mesma impressão)?</label></div>
+          <div class="field" id="calcCampoQtdLote" style="display:none;"><label>Quantas peças saem desse lote?</label><input id="calcQtdLote" type="number" min="1" step="1" value="1" oninput="calcularOrcamento3D()"></div>
         </div>
         <div class="form-row-2">
           <div class="field"><label>Peso da peça</label>
@@ -1019,11 +1023,12 @@
         <div class="form-row-2">
           <div class="field"><label>Taxa de perdas/refugo (%)</label><input id="calcTaxaPerda" type="number" min="0" max="95" step="1" value="0" oninput="calcularOrcamento3D()"></div>
         </div>
-        <div class="calc-note">⚠ Consumo (W), valor da impressora e vida útil são estimativas — confira o manual, a etiqueta ou a nota fiscal da sua máquina pra um preço mais preciso. A depreciação por hora é sempre calculada a partir do valor da impressora e da vida útil, nunca digitada direto. Mão de obra e taxa de perdas/refugo são opcionais (ficam zeradas por padrão) — preencha se quiser embutir seu tempo de trabalho e o custo de impressões que falham no preço final.</div>
+        <div class="calc-note">⚠ Consumo (W), valor da impressora e vida útil são estimativas — confira o manual, a etiqueta ou a nota fiscal da sua máquina pra um preço mais preciso. A depreciação por hora é sempre calculada a partir do valor da impressora e da vida útil, nunca digitada direto. Mão de obra e taxa de perdas/refugo são opcionais (ficam zeradas por padrão). Se ativar "lote de impressão" (várias peças saindo da mesma impressão, tipo várias miniaturas na mesma mesa), preencha peso, tempo e mão de obra pensando na LEVA INTEIRA — a calculadora divide filamento, energia, depreciação e mão de obra pela quantidade de peças. Embalagem continua sendo o custo de UMA peça só (imprimir várias juntas não deixa a embalagem mais barata).</div>
       </div>
 
       <div class="calc-result">
         <h3>Resultado</h3>
+        <div class="calc-linha" id="calcLinhaQtdLote" style="display:none;"><span>Peças nesse lote</span><span id="calcOutQtdLote">1</span></div>
         <div class="calc-linha"><span>Custo do filamento</span><span id="calcOutFilamento">R$ 0,00</span></div>
         <div class="calc-linha"><span>Custo de energia</span><span id="calcOutEnergia">R$ 0,00</span></div>
         <div class="calc-linha"><span>Embalagem</span><span id="calcOutEmbalagem">R$ 0,00</span></div>
@@ -1035,8 +1040,8 @@
         <div class="calc-linha"><span>Lucro por peça</span><span id="calcOutLucro">R$ 0,00</span></div>
         <div class="calc-linha destaque"><span>Margem de lucro real</span><span id="calcOutMargemReal">0%</span></div>
         <div class="calc-linha"><span>Comissão do ponto</span><span id="calcOutComissao">R$ 0,00</span></div>
-        <div class="calc-linha total"><span>Preço de venda sugerido</span><span id="calcOutPrecoVenda">R$ 0,00</span></div>
-        <div class="calc-linha"><span>Total do lote (<span id="calcOutQtdLabel">1</span> peça(s))</span><span id="calcOutTotalLote">R$ 0,00</span></div>
+        <div class="calc-linha total"><span>Preço de venda sugerido (por peça)</span><span id="calcOutPrecoVenda">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Total do pedido (<span id="calcOutQtdLabel">1</span> peça(s))</span><span id="calcOutTotalLote">R$ 0,00</span></div>
         <div class="calc-note">Markup é aplicado sobre o CUSTO pra chegar no preço de venda. Margem de lucro real é a fatia do PREÇO DE VENDA que é lucro de verdade — são coisas diferentes (por isso 100% de markup vira 50% de margem real).</div>
         <div class="form-actions" style="margin-top:14px;">
           <button class="btn" onclick="usarPrecoNoProduto()">Usar como novo produto</button>

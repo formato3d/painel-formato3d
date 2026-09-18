@@ -159,9 +159,9 @@ function renderProdutos(){
     const foto = p.foto
       ? `<img src="${p.foto}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--line);">`
       : `<div class="placeholder-thumb"></div>`;
-    tr.innerHTML = `<td>${foto}</td><td>${esc(p.codigo)}</td><td>${esc(p.nome)}</td><td>${esc(p.categoria || '—')}</td>
-      <td>R$ ${fmtMoeda(p.precoCusto)}</td><td>R$ ${fmtMoeda(p.preco)}</td>
-      <td>${qtd === null ? '—' : `<span class="badge ${baixo ? 'estoque-baixo' : 'estoque-ok'}">${qtd}</span>`}</td>
+    tr.innerHTML = `<td>${foto}</td><td data-label="Código">${esc(p.codigo)}</td><td data-label="Nome">${esc(p.nome)}</td><td data-label="Categoria">${esc(p.categoria || '—')}</td>
+      <td data-label="Preço custo">R$ ${fmtMoeda(p.precoCusto)}</td><td data-label="Preço venda">R$ ${fmtMoeda(p.preco)}</td>
+      <td data-label="Estoque">${qtd === null ? '—' : `<span class="badge ${baixo ? 'estoque-baixo' : 'estoque-ok'}">${qtd}</span>`}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="abrirFormProduto('${p.id}')" title="Editar">✎</button>
         <button class="btn-icon danger" onclick="excluirProduto('${p.id}')" title="Excluir">✕</button>
@@ -212,4 +212,3 @@ function gerarCatalogoPdf(){
   document.body.classList.add('modo-impressao');
   window.print();
 }
-

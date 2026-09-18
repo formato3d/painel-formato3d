@@ -74,15 +74,15 @@ function adicionarItemOrc(item){
   const valorUnit = item ? fmtMoeda(item.valorUnit) : '0,00';
   const custoUnit = item ? fmtMoeda(item.custoUnit || 0) : '0,00';
   tr.innerHTML = `
-    <td class="cod-cell"><input class="it-cod" value="${esc(cod)}" readonly></td>
-    <td>
+    <td class="cod-cell" data-label="Cód."><input class="it-cod" value="${esc(cod)}" readonly></td>
+    <td data-label="Produto / descrição">
       <select class="it-produto" onchange="preencherItemDoProduto(this)">${opcoesProdutosHtml(produtoId)}</select>
       <input class="it-desc" style="margin-top:4px;" value="${esc(desc)}" placeholder="Descrição">
     </td>
-    <td class="qtd-col"><input class="it-qtd" value="${qtd}" oninput="atualizarTotalOrc()"></td>
-    <td class="valor-col"><input class="it-valor" value="${valorUnit}" oninput="atualizarTotalOrc()"></td>
-    <td class="custo-col"><input class="it-custo" value="${custoUnit}" oninput="atualizarTotalOrc()" title="Custo unitário (não aparece no orçamento impresso)"></td>
-    <td class="total-item">R$ 0,00</td>
+    <td class="qtd-col" data-label="Qtd"><input class="it-qtd" value="${qtd}" oninput="atualizarTotalOrc()"></td>
+    <td class="valor-col" data-label="Valor unit."><input class="it-valor" value="${valorUnit}" oninput="atualizarTotalOrc()"></td>
+    <td class="custo-col" data-label="Custo unit."><input class="it-custo" value="${custoUnit}" oninput="atualizarTotalOrc()" title="Custo unitário (não aparece no orçamento impresso)"></td>
+    <td class="total-item" data-label="Total">R$ 0,00</td>
     <td class="acoes-col">
       <button type="button" class="salvar-modelo" onclick="salvarItemComoModelo(this)" title="Salvar como modelo">💾</button>
       <button type="button" class="del" onclick="this.closest('tr').remove(); atualizarTotalOrc();" title="Remover">✕</button>
@@ -316,7 +316,7 @@ function renderOrcamentos(){
     const botaoFinanceiro = o.financeiroGerado
       ? `<button class="btn-icon" onclick="verFinanceiroDoOrcamento('${o.id}')" title="Ver no financeiro">R$🔎</button>`
       : (podeGerarConta ? `<button class="btn-icon" onclick="gerarContaReceber('${o.id}')" title="Gerar conta a receber">R$+</button>` : '');
-    tr.innerHTML = `<td>${esc(o.numero)}</td><td>${fmtDataExibir(o.data)}</td><td>${esc(nomeCliente(o.clienteId))}</td><td>R$ ${fmtMoeda(o.total)}</td><td>${badgeStatusOrc(o.status)}</td>
+    tr.innerHTML = `<td data-label="Nº">${esc(o.numero)}</td><td data-label="Data">${fmtDataExibir(o.data)}</td><td data-label="Cliente">${esc(nomeCliente(o.clienteId))}</td><td data-label="Total">R$ ${fmtMoeda(o.total)}</td><td data-label="Status">${badgeStatusOrc(o.status)}</td>
       <td class="acoes">
         ${botaoFinanceiro}
         <button class="btn-icon" onclick="imprimirOrcamento('${o.id}')" title="Imprimir / PDF">🖨</button>
@@ -386,4 +386,3 @@ function verFinanceiroDoOrcamento(orcId){
     linha.classList.add('linha-em-foco');
   }, 60);
 }
-

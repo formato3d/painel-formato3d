@@ -141,9 +141,14 @@
   #btnTema{ font-size:15px; padding:6px 10px; line-height:1; }
   #btnAtualizarDados{ font-size:15px; padding:6px 10px; line-height:1; }
   #btnSalvarDados{ font-size:12.5px; padding:6px 10px; line-height:1; }
-  #statusSalvo{ font-size:11.5px; color:var(--gray); white-space:nowrap; }
-  #statusSalvo.dirty{ color:var(--red); font-weight:bold; }
-  #statusSalvo.autosave{ color:var(--green); font-weight:bold; }
+    /* Indicador de salvamento — badge colorido (mesmo padrão visual dos .badge do resto
+       do painel) em vez de um textinho cinza discreto: precisa ser impossível de não
+       notar se ainda tem alteração não confirmada pelo servidor. */
+    #statusSalvo{ font-size:12px; white-space:nowrap; background:var(--badge-neutral-bg); color:var(--gray); transition:background-color .15s, color .15s; }
+    #statusSalvo.salvando{ background:var(--amber-bg); color:var(--amber); }
+    #statusSalvo.salvo{ background:var(--green-bg); color:var(--green); }
+    #statusSalvo.erro-salvar{ background:var(--red-bg); color:var(--red); animation:piscaErroSalvar 1.4s ease-in-out infinite; }
+    @keyframes piscaErroSalvar{ 0%,100%{ opacity:1; } 50%{ opacity:0.55; } }
   .linked-label{ font-size:11.5px; color:var(--navy); font-weight:bold; white-space:nowrap; }
 
   /* ===== Layout ===== */
@@ -699,7 +704,7 @@
     <button class="navtab" id="navtab-lixeira" onclick="mostrarAba('lixeira')">🗑️ Lixeira</button>
   </nav>
   <div class="top-actions">
-    <span id="statusSalvo">carregando...</span>
+    <span id="statusSalvo" class="badge">carregando...</span>
     <button id="btnSalvarDados" onclick="salvarAgora()" title="Salvar tudo agora, sem esperar">💾 Salvar</button>
     <button id="btnAtualizarDados" onclick="atualizarAgora()" title="Buscar dados atualizados agora">🔄</button>
     <button id="btnTema" onclick="alternarTema()" title="Alternar tema claro/escuro">🌙</button>

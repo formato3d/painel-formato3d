@@ -74,7 +74,7 @@ function renderClientes(){
       ? `<b>${h.qtd}</b> pedido${h.qtd > 1 ? 's' : ''} · R$ ${fmtMoeda(h.total)}${h.ultimo ? ' · último em ' + fmtDataExibir(h.ultimo) : ''}`
       : '<span style="color:var(--gray)">Sem pedidos ainda</span>';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${esc(c.nome)}</td><td>${esc(c.telefone)}</td><td>${esc(c.email)}</td><td>${esc(c.cidade)}</td><td>${historicoTxt}</td>
+    tr.innerHTML = `<td data-label="Nome">${esc(c.nome)}</td><td data-label="Telefone">${esc(c.telefone)}</td><td data-label="E-mail">${esc(c.email)}</td><td data-label="Cidade">${esc(c.cidade)}</td><td data-label="Histórico">${historicoTxt}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="abrirFormCliente('${c.id}')" title="Editar">✎</button>
         <button class="btn-icon danger" onclick="excluirCliente('${c.id}')" title="Excluir">✕</button>
@@ -94,4 +94,3 @@ function atualizarSelectsClientes(){
     sel.value = atual;
   });
 }
-

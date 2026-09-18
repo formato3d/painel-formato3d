@@ -43,6 +43,17 @@ let state = estadoPadrao();
 let dirty = false;
 let carregando = true;
 let autoSaveTimer = null;
+// Evita mandar dois salvamentos ao mesmo tempo (ex.: o autosave dispara bem na hora
+// em que uma atualização em segundo plano também tenta reenviar algo pendente) — só
+// controla concorrência local; a mesclagem por id no servidor já é segura de qualquer
+// jeito, isso aqui é só pra não gastar duas chamadas de rede à toa.
+let salvandoEmAndamento = false;
+// Nº de falhas seguidas tentando SALVAR (não confundir com tentativasCarregamento,
+// que é pra buscar) e o timer da próxima tentativa automática — sem isso, uma falha
+// de rede no meio de um salvamento deixava a alteração parada, esperando a pessoa
+// mexer em mais alguma coisa pra tentar de novo.
+let tentativasSalvamento = 0;
+let timerNovaTentativaSalvamento = null;
 // Última cópia do estado que veio do servidor (ou que o servidor confirmou como
 // mesclada, depois de um salvamento) — é contra ISSO que a gente compara pra saber o
 // que ESTE aparelho de fato criou ou alterou desde a última sincronização (ver
@@ -172,35 +183,50 @@ function restaurarItemLixeira(tipo, id){
   renderLixeira();
 }
 
+// Cada ação registrada aqui (salvar um cadastro, excluir, confirmar pagamento etc.)
+// já é uma ação COMPLETA e pronta pra ir pro servidor — nunca é chamada tecla-a-tecla
+// enquanto a pessoa ainda está digitando num formulário (isso só acontece quando o
+// formulário já foi confirmado). Por isso não precisa de um debounce longo esperando
+// "a pessoa terminar de mexer": os 350ms aqui existem só pra juntar duas ações bem
+// próximas (ex.: excluir dois itens em sequência rápida) num único envio, não pra
+// fazer a pessoa esperar. A parte que REALMENTE evita perder informação é a linha
+// salvarCacheLocal() logo abaixo: ela grava no navegador NA HORA, antes de qualquer
+// rede, então mesmo que a aba feche/trave/perca sinal no meio do caminho, a próxima
+// vez que o painel abrir NESTE aparelho ele encontra a alteração e reenvia sozinho
+// (ver carregarCacheLocal/aplicarEstadoMesclado_ mais abaixo).
 function marcarAlterado(){
   if(carregando) return;
   dirty = true;
+  salvarCacheLocal();
   const el = document.getElementById('statusSalvo');
   el.textContent = 'salvando na planilha...';
-  el.classList.add('dirty');
+  el.className = 'badge salvando';
   clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(salvarNoServidor, 800);
+  autoSaveTimer = setTimeout(salvarNoServidor, 350);
 }
 
 // Botão "💾 Salvar" ao lado do "🔄 Atualizar": força o envio imediato de tudo que está
-// registrado agora, sem esperar o debounce de 800ms do autosave — pra quem quer ter
+// registrado agora, sem esperar o pequeno debounce do autosave — pra quem quer ter
 // certeza (visualmente) de que nada ficou pra trás antes de fechar a aba, por exemplo.
 function salvarAgora(){
   if(configuracaoPendente()) return;
   clearTimeout(autoSaveTimer);
   dirty = true;
+  salvarCacheLocal();
   const el = document.getElementById('statusSalvo');
   el.textContent = 'salvando na planilha...';
-  el.classList.add('dirty');
+  el.className = 'badge salvando';
   salvarNoServidor();
 }
 
 function marcarSalvo(){
   dirty = false;
+  tentativasSalvamento = 0;
+  clearTimeout(timerNovaTentativaSalvamento);
   const el = document.getElementById('statusSalvo');
   const agora = new Date();
   el.textContent = 'salvo às ' + String(agora.getHours()).padStart(2,'0') + ':' + String(agora.getMinutes()).padStart(2,'0');
-  el.classList.remove('dirty');
+  el.className = 'badge salvo';
 }
 
 /* =========================================================
@@ -211,9 +237,15 @@ function marcarSalvo(){
    acontecendo em segundo plano pra confirmar ou trazer o que mudou.
    ========================================================= */
 const CHAVE_CACHE_LOCAL = 'painelCacheEstado';
+// Grava o "pendente" junto com os dados: true significa que, na hora em que isso foi
+// salvo no navegador, ainda existia alguma alteração que NÃO tinha sido confirmada
+// pelo servidor (dirty=true). É essa marca que permite recuperar sozinho uma edição
+// feita bem antes de fechar a aba (ex.: bateria do celular acabou, navegador travou,
+// aba foi fechada sem querer no meio do caminho) — ver carregarCacheLocal/
+// aplicarEstadoMesclado_ logo abaixo.
 function salvarCacheLocal(){
   try {
-    localStorage.setItem(CHAVE_CACHE_LOCAL, JSON.stringify({ quando: new Date().toISOString(), state: state }));
+    localStorage.setItem(CHAVE_CACHE_LOCAL, JSON.stringify({ quando: new Date().toISOString(), pendente: dirty, state: state }));
   } catch(e){
     // Sem espaço no navegador (ou modo anônimo bloqueando localStorage) — não é
     // grave, é só uma otimização de velocidade; o painel continua funcionando
@@ -232,10 +264,21 @@ function carregarCacheLocal(){
     if(!cache || !cache.state) return false;
     state = Object.assign(estadoPadrao(), cache.state);
     carregando = false;
-    renderTudo();
     const el = document.getElementById('statusSalvo');
-    el.textContent = 'mostrando dados salvos neste aparelho — atualizando...';
-    el.classList.remove('dirty');
+    if(cache.pendente){
+      // Esse cache foi gravado com uma alteração ainda não confirmada pelo servidor —
+      // provavelmente a aba fechou/travou antes do autosave terminar. Marca "dirty"
+      // JÁ AQUI (antes de carregarDoServidor rodar) pra aplicarEstadoMesclado_ não
+      // substituir essa alteração pela versão do servidor: em vez disso, assim que a
+      // baseline fresca chegar, ela reenvia essa alteração pendente sozinha.
+      dirty = true;
+      el.textContent = 'reenviando uma alteração pendente deste aparelho...';
+      el.className = 'badge salvando';
+    } else {
+      el.textContent = 'mostrando dados salvos neste aparelho — atualizando...';
+      el.className = 'badge';
+    }
+    renderTudo();
     return true;
   } catch(e){
     console.warn('Não foi possível ler o cache local dos dados:', e);
@@ -261,12 +304,23 @@ const TIPOS_SINCRONIZADOS = ['clientes', 'produtos', 'orcamentos', 'financeiro',
 
 function salvarNoServidor(){
   if(configuracaoPendente()) return;
+  if(salvandoEmAndamento){
+    // Já existe um salvamento em voo agora (ex.: o autosave disparou bem na hora em
+    // que uma recuperação de alteração pendente também tentou mandar algo) — não
+    // manda duas requisições ao mesmo tempo à toa; tenta de novo logo que a primeira
+    // terminar (calcularAlteracoes_ é recalculado na hora, então nada fica de fora).
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(salvarNoServidor, 300);
+    return;
+  }
   // Manda só o que ESTE aparelho criou ou alterou desde a última sincronização (ver
   // calcularAlteracoes_) — nunca mais a lista inteira de cada tipo. É isso que permite
   // duas pessoas usando o painel ao mesmo tempo em aparelhos diferentes sem uma apagar
   // o que a outra acabou de salvar: o servidor mescla cada registro pelo próprio id
   // (ver salvarTudo/mesclarArrayPorId_ no Code.gs), então só existe risco de verdade
   // se as duas mexerem EXATAMENTE no mesmo registro ao mesmo tempo.
+  clearTimeout(timerNovaTentativaSalvamento);
+  salvandoEmAndamento = true;
   const alteracoes = {};
   TIPOS_SINCRONIZADOS.forEach(tipo => { alteracoes[tipo] = calcularAlteracoes_(tipo); });
   alteracoes.proximoNumero = state.proximoNumero;
@@ -277,6 +331,7 @@ function salvarNoServidor(){
   })
     .then(r => r.json())
     .then(resp => {
+      salvandoEmAndamento = false;
       if(sessaoInvalida(resp.erro)){ voltarParaLogin('Sua sessão expirou — faça login novamente.'); return; }
       if(resp.erro) throw new Error(resp.erro);
       // O servidor devolve o estado inteiro já mesclado (com o que outra pessoa possa
@@ -286,10 +341,20 @@ function salvarNoServidor(){
       salvarCacheLocal();
     })
     .catch(err => {
+      salvandoEmAndamento = false;
       const el = document.getElementById('statusSalvo');
-      el.textContent = 'não foi possível salvar agora — verifique sua internet';
-      el.classList.add('dirty');
+      el.textContent = 'não foi possível salvar agora — tentando de novo...';
+      el.className = 'badge erro-salvar';
       console.error(err);
+      // Tenta de novo sozinho, com espera crescente (2s, 4s, 8s... até 30s no máximo)
+      // — a pessoa não precisa ficar de olho nem mexer em mais nada pra a alteração
+      // pendente ser reenviada assim que a conexão voltar. Enquanto isso, o cache local
+      // (já gravado em marcarAlterado/salvarAgora) garante que nada se perde mesmo que
+      // a aba feche antes da conexão voltar (ver carregarCacheLocal).
+      tentativasSalvamento++;
+      const espera = Math.min(30000, 2000 * Math.pow(2, tentativasSalvamento - 1));
+      clearTimeout(timerNovaTentativaSalvamento);
+      timerNovaTentativaSalvamento = setTimeout(salvarNoServidor, espera);
     });
 }
 
@@ -298,12 +363,17 @@ function salvarNoServidor(){
 // atualiza a "baseline" (contra a qual calcularAlteracoes_ compara pra saber o que
 // mudou) e, se não tiver uma edição pendente (dirty) nesse meio-tempo, também troca o
 // que está na tela pela versão mais atual. Se a pessoa mexeu em mais alguma coisa
-// enquanto o servidor respondia, não troca a tela agora (perderia o que ela acabou de
-// digitar) — o próprio autosave que já está agendado cuida de mandar isso daqui a
-// pouco, comparando com a baseline que acabamos de atualizar.
+// enquanto o servidor respondia — incluindo uma alteração RECUPERADA do cache local
+// que ainda não tinha sido confirmada (ver carregarCacheLocal) — não troca a tela
+// agora (perderia o que ela acabou de digitar/o que estava pendente); em vez disso,
+// manda essa alteração pendente pro servidor agora que já temos uma baseline fresca
+// pra comparar, sem esperar a pessoa mexer em mais alguma coisa pra isso acontecer.
 function aplicarEstadoMesclado_(dados){
   stateBaseline = JSON.parse(JSON.stringify(dados));
-  if(dirty) return;
+  if(dirty){
+    salvarNoServidor();
+    return;
+  }
   state = Object.assign(estadoPadrao(), dados);
   carregando = false;
   renderTudo();
@@ -332,11 +402,13 @@ function carregarDoServidor(){
       // bem rápido logo no primeiro carregamento, o painel nunca mais buscaria
       // atualizações sozinho.
       iniciarVerificacaoPeriodica();
-      // Tem uma edição sendo salva agora (autosave em andamento) — não troca o que
-      // está na tela por baixo dos panos; quando esse salvamento terminar, o painel
-      // já fica em dia sozinho (ver salvarNoServidor/marcarSalvo), inclusive
-      // limpando um aviso de erro anterior que tenha ficado na tela.
-      if(dirty) return;
+      // Tem uma alteração pendente deste aparelho — uma edição sendo salva agora
+      // (autosave em andamento) OU uma alteração RECUPERADA do cache local depois de
+      // a aba ter fechado/travado antes de terminar de salvar (ver
+      // carregarCacheLocal). Nos dois casos não troca o que está na tela por baixo dos
+      // panos — aplicarEstadoMesclado_ já cuida de reenviar essa alteração pendente
+      // usando esta baseline fresca, sem esperar a pessoa mexer em mais alguma coisa.
+      if(dirty){ aplicarEstadoMesclado_(dados); return; }
       // Se já tínhamos carregado antes e a revisão não mudou, ninguém salvou nada novo
       // nesse meio-tempo — evita re-renderizar as listas à toa a cada verificação
       // periódica (o que resetaria filtros/scroll sem necessidade).
@@ -361,7 +433,7 @@ function carregarDoServidor(){
       el.textContent = carregando
         ? 'não foi possível carregar os dados agora — tentando de novo...'
         : 'não foi possível atualizar agora (mostrando os últimos dados salvos) — tentando de novo...';
-      el.classList.add('dirty');
+      el.className = 'badge erro-salvar';
       // Uma vez que a verificação periódica (a cada 15s) já está ligada, ela mesma
       // cobre a próxima tentativa — não precisa de um timer próprio duplicado.
       if(!verificacaoPeriodicaAtiva){
@@ -379,7 +451,7 @@ function atualizarAgora(){
   clearTimeout(timerNovaTentativaCarregamento);
   const el = document.getElementById('statusSalvo');
   el.textContent = 'atualizando...';
-  el.classList.remove('dirty');
+  el.className = 'badge';
   carregarDoServidor();
 }
 
@@ -422,3 +494,33 @@ function existeEdicaoEmAndamento(){
   return false;
 }
 
+/* =========================================================
+   ÚLTIMA CHANCE AO FECHAR A ABA
+   O aviso "sair mesmo, tem alteração não salva?" (ver beforeunload em
+   02-auth-usuarios.js) já ajuda quando a pessoa fecha a aba de propósito, mas em
+   celular é comum a aba ser encerrada pelo sistema (trocar de app, tela apagar,
+   bateria acabar) sem esse aviso aparecer. "pagehide" dispara nesses casos também
+   (ao contrário de "beforeunload", que muitos navegadores mobile ignoram) — usamos
+   pra tentar mandar a alteração pendente pro servidor com navigator.sendBeacon, que o
+   navegador entrega mesmo com a página sendo fechada (um fetch normal seria
+   cancelado). É só mais uma tentativa, best-effort: quem garante de verdade que nada
+   se perde é o cache local gravado na hora em marcarAlterado/salvarAgora — se nem o
+   beacon nem o cache local conseguirem confirmar com o servidor agora, a próxima vez
+   que o painel abrir neste aparelho encontra a alteração pendente e reenvia sozinho
+   (ver carregarCacheLocal/aplicarEstadoMesclado_).
+   ========================================================= */
+window.addEventListener('pagehide', function(){
+  if(!dirty || configuracaoPendente() || typeof navigator.sendBeacon !== 'function') return;
+  try{
+    const alteracoes = {};
+    TIPOS_SINCRONIZADOS.forEach(tipo => { alteracoes[tipo] = calcularAlteracoes_(tipo); });
+    alteracoes.proximoNumero = state.proximoNumero;
+    alteracoes.seq = state.seq;
+    const payload = JSON.stringify({ token: CONFIG.TOKEN, sessao: sessaoAtual(), state: alteracoes });
+    navigator.sendBeacon(CONFIG.URL_API, new Blob([payload], { type: 'text/plain;charset=UTF-8' }));
+  }catch(e){
+    // Melhor deixar a aba fechar do que travar por causa disso — o cache local já
+    // gravado cobre a recuperação da próxima vez que o painel abrir.
+    console.warn('Não foi possível mandar o beacon de última chance ao fechar a aba:', e);
+  }
+});

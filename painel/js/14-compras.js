@@ -186,13 +186,13 @@ function renderCompras(){
     const tr = document.createElement('tr');
     const anexo = c.comprovanteUrl ? `<a href="${esc(c.comprovanteUrl)}" target="_blank" rel="noopener" title="Abrir comprovante${c.comprovanteNome ? ': ' + esc(c.comprovanteNome) : ''}">🧾</a>` : '—';
     tr.innerHTML = `
-      <td>${esc(c.descricao)}</td>
-      <td>${esc(c.fornecedor)}</td>
-      <td>${esc(c.categoria)}</td>
-      <td>${fmtDataExibir(c.data)}</td>
-      <td>R$ ${fmtMoeda(c.valor)}</td>
-      <td>${esc(c.formaPagamento)}</td>
-      <td class="anexos-cell">${anexo}</td>
+      <td data-label="Descrição">${esc(c.descricao)}</td>
+      <td data-label="Fornecedor">${esc(c.fornecedor)}</td>
+      <td data-label="Categoria">${esc(c.categoria)}</td>
+      <td data-label="Data">${fmtDataExibir(c.data)}</td>
+      <td data-label="Valor">R$ ${fmtMoeda(c.valor)}</td>
+      <td data-label="Forma de pagamento">${esc(c.formaPagamento)}</td>
+      <td class="anexos-cell" data-label="Comprovante">${anexo}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="abrirFormCompra('${c.id}')" title="Editar">✎</button>
         <button class="btn-icon danger" onclick="excluirCompra('${c.id}')" title="Excluir">✕</button>

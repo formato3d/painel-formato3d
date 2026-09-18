@@ -283,12 +283,35 @@ function alternarStatusFinanceiro(id){
     delete f.dataPagamento;
     delete f.formaPagamentoConfirmada;
     delete f.descontoMaquininha;
+    delete f.totalOrcamentoNoPagamento;
     f.status = 'pendente';
+    desfazerConclusaoOrcamentoVinculado_(f);
     marcarAlterado();
     renderFinanceiro();
+    renderOrcamentos();
     return;
   }
   abrirConfirmarPagamento(id);
+}
+// Quando o pagamento de uma venda vinculada a um orçamento é desfeito (volta pra
+// pendente), o orçamento some de "Concluído" e volta pra "Aprovado" — só mexe se
+// ainda estiver Concluído, pra não sobrescrever um status que a pessoa já tenha
+// trocado manualmente por outro motivo.
+function desfazerConclusaoOrcamentoVinculado_(f){
+  if(!f.orcamentoId) return;
+  const o = state.orcamentos.find(x => x.id === f.orcamentoId);
+  if(!o || o.excluidoEm || o.status !== 'Concluído') return;
+  o.status = 'Aprovado';
+}
+// Quando o pagamento de uma venda vinculada a um orçamento é confirmado, o orçamento
+// passa a "Concluído" automaticamente na aba de Orçamentos — sem precisar editar os
+// dois lugares à mão pra manter tudo consistente.
+function concluirOrcamentoVinculado_(f){
+  if(!f.orcamentoId) return;
+  const o = state.orcamentos.find(x => x.id === f.orcamentoId);
+  if(!o || o.excluidoEm || o.status === 'Concluído') return;
+  o.status = 'Concluído';
+  confirmarVendaSeNecessario(o);
 }
 
 /* =========================================================
@@ -352,11 +375,18 @@ function confirmarPagamentoSalvar(){
   f.dataPagamento = dataInformada;
   f.formaPagamentoConfirmada = formaPagamento;
   f.descontoMaquininha = desconto || 0;
+  // "Foto" do total do orçamento no exato momento do pagamento — ver financeiroDessincronizado.
+  if(f.orcamentoId){
+    const oVinculado = state.orcamentos.find(x => x.id === f.orcamentoId);
+    if(oVinculado) f.totalOrcamentoNoPagamento = oVinculado.total;
+  }
+  concluirOrcamentoVinculado_(f);
 
   const ehReceber = f.tipo === 'receber';
   marcarAlterado();
   fecharConfirmarPagamento();
   renderFinanceiro();
+  renderOrcamentos();
   // Pagamento de uma venda (conta a receber) confirmado agora — oferece gerar o recibo na hora.
   if(ehReceber){
     if(confirm('Pagamento confirmado!\n\nDeseja gerar o recibo agora?')) abrirRecibo(f.id);
@@ -484,21 +514,35 @@ function sincronizarFinanceiroComOrcamento(o){
   f.valor = o.total;
   f.clienteId = o.clienteId;
 }
-// true quando um lançamento "a receber" vinculado a um orçamento já foi pago, mas o
-// orçamento mudou depois (valor ou cliente diferente do que foi cobrado) — como pagamentos
-// confirmados não são sobrescritos automaticamente, isso pede uma checada manual.
 // Valor "bruto" recebido — o valor que de fato bate com o total do orçamento, somando
-// de volta o desconto da maquininha (se teve) ao valor líquido guardado em f.valor.
-// Sem isso, toda venda confirmada no cartão de crédito com desconto ficava marcada como
-// "orçamento mudou" à toa, já que o líquido nunca bate sozinho com o total do orçamento.
+// de volta o desconto da maquininha (se teve) ao valor líquido guardado em f.valor. Usado
+// só pra MOSTRAR o de/para em atualizarFinanceiroComOrcamento, não mais pra detectar
+// desencontro (ver financeiroDessincronizado).
 function valorBrutoRecebido(f){
   return (f.valor || 0) + (f.descontoMaquininha || 0);
 }
+// true quando um lançamento "a receber" vinculado a um orçamento já foi pago, mas o
+// orçamento MUDOU DEPOIS que o pagamento foi confirmado (valor ou cliente diferente do que
+// foi cobrado na hora) — como pagamentos confirmados não são sobrescritos automaticamente,
+// isso pede uma checada manual.
+//
+// A comparação de valor usa f.totalOrcamentoNoPagamento — uma "foto" do total do orçamento
+// tirada no exato momento em que o pagamento foi confirmado (ver confirmarPagamentoSalvar) —
+// em vez de tentar reconstituir o bruto a partir do valor líquido recebido. Isso importa
+// porque o valor realmente recebido no cartão quase nunca bate centavo a centavo com o total
+// do orçamento (taxa da maquininha varia por bandeira/parcelamento e nem sempre é digitada
+// certinha no desconto na hora de confirmar) — isso é normal e não é um desencontro de
+// verdade. O que É um desencontro de verdade é o orçamento ter sido alterado DEPOIS do
+// pagamento já confirmado, e é exatamente isso que essa comparação pega.
+// Lançamentos pagos antes dessa mudança (sem a "foto" salva) não têm como comparar o valor
+// com segurança, então só continuam checando o cliente.
 function financeiroDessincronizado(f){
   if(!f.orcamentoId || f.status !== 'pago') return false;
   const o = state.orcamentos.find(x => x.id === f.orcamentoId);
   if(!o || o.excluidoEm) return false;
-  return Math.round(valorBrutoRecebido(f) * 100) !== Math.round(o.total * 100) || f.clienteId !== o.clienteId;
+  if(f.clienteId !== o.clienteId) return true;
+  if(f.totalOrcamentoNoPagamento === undefined) return false;
+  return Math.round(o.total * 100) !== Math.round(f.totalOrcamentoNoPagamento * 100);
 }
 // Botão "🔄" que aparece junto do aviso "orçamento mudou": corrige manualmente um lançamento
 // já pago pra bater com o orçamento vinculado. Diferente de sincronizarFinanceiroComOrcamento
@@ -528,6 +572,7 @@ function atualizarFinanceiroComOrcamento(financeiroId){
   // orçamento, o valor líquido recebido continua sendo o bruto novo menos esse desconto.
   f.valor = Math.max(0, o.total - (f.descontoMaquininha || 0));
   f.clienteId = o.clienteId;
+  f.totalOrcamentoNoPagamento = o.total; // atualiza a "foto" pra não continuar desencontrado
   marcarAlterado();
   renderFinanceiro();
 }
@@ -660,4 +705,3 @@ function renderCardsFinanceiro(){
     <div class="card"><div class="label">Vencidas (${rotuloTipo})</div><div class="value ${vencidas > 0 ? 'red' : ''}">${vencidas}</div><div class="sub">Contas ${rotuloTipo} pendentes com vencimento já passado</div></div>
   `;
 }
-

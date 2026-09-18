@@ -22,28 +22,60 @@ function calcularOrcamento3D(){
   const horasTotais = horas + (minutos / 60);
   const precoKwh = parseMoeda(document.getElementById('calcPrecoKwh').value);
   const embalagem = parseMoeda(document.getElementById('calcEmbalagem').value);
-  const desgasteHora = parseMoeda(document.getElementById('calcDesgaste').value);
-  const margem = parseFloat(document.getElementById('calcMargem').value) || 0;
-  const comissao = Math.min(95, parseFloat(document.getElementById('calcComissao').value) || 0);
+
+  // Depreciação da impressora: em vez de pedir um "desgaste por hora" solto (um número
+  // sem origem clara), a pessoa informa quanto pagou na impressora e por quantas horas
+  // pretende usá-la — a depreciação por hora é sempre CALCULADA a partir desses dois
+  // valores (valor da máquina ÷ vida útil em horas), nunca digitada direto.
+  const valorImpressora = parseMoeda(document.getElementById('calcValorImpressora').value);
+  const vidaUtilHoras = Math.max(1, parseFloat(document.getElementById('calcVidaUtil').value) || 1);
+  const depreciacaoPorHora = valorImpressora / vidaUtilHoras;
+  const elDepreciacaoHora = document.getElementById('calcDepreciacaoHora');
+  if(elDepreciacaoHora) elDepreciacaoHora.value = 'R$ ' + fmtMoeda(depreciacaoPorHora) + '/h';
+
+  const markup = Math.max(0, parseFloat(document.getElementById('calcMarkup').value) || 0);
+  // A comissão do cartão/ponto de venda é sempre uma % do PREÇO DE VENDA final (o que o
+  // cliente paga) — nunca do custo. Por isso o preço é "engordado" um pouco mais abaixo:
+  // depois de a maquininha descontar a comissão sobre esse preço maior, o que sobra pra
+  // quem vendeu é exatamente o preço base (custo + markup) que ela queria receber.
+  const comissao = Math.min(95, Math.max(0, parseFloat(document.getElementById('calcComissao').value) || 0));
   const consumoW = parseFloat(document.getElementById('calcConsumo').value) || 0;
 
   const custoFilamento = pesoKg * precoFilamentoKg;
   const kWhConsumido = (consumoW / 1000) * horasTotais;
   const custoEnergia = kWhConsumido * precoKwh;
-  const custoDesgaste = desgasteHora * horasTotais;
-  const custoBase = custoFilamento + custoEnergia + embalagem + custoDesgaste;
+  const custoDesgaste = depreciacaoPorHora * horasTotais;
+  const custoTotal = custoFilamento + custoEnergia + embalagem + custoDesgaste;
 
-  const custoComMargem = custoBase * (1 + margem / 100);
-  const valorMargem = custoComMargem - custoBase;
-  const precoVenda = comissao < 100 ? custoComMargem / (1 - comissao / 100) : custoComMargem;
-  const valorComissao = precoVenda - custoComMargem;
+  // MARKUP: percentual aplicado sobre o CUSTO pra chegar no preço base (ver item 7 da
+  // explicação na tela — markup e margem de lucro NÃO são a mesma coisa).
+  // Preço base = Custo total × (1 + Markup/100)
+  const precoBase = custoTotal * (1 + markup / 100);
+  // Lucro em reais: o que a pessoa efetivamente pretende ganhar por peça. Não muda com a
+  // comissão — é justamente pra preservar esse valor que o preço de venda final é
+  // engordado (ver precoVenda logo abaixo), então o lucro em R$ é sempre precoBase - custo.
+  const lucro = precoBase - custoTotal;
+  // Preço de venda final: o preço base "engordado" o suficiente pra, depois de a
+  // maquininha descontar a comissão, ainda sobrar o preço base inteiro pra quem vendeu.
+  const precoVenda = comissao < 100 ? precoBase / (1 - comissao / 100) : precoBase;
+  // Valor da comissão: sempre uma fatia do preço de venda final (não do custo, nem do
+  // preço base) — dá pra provar que valorComissao == precoVenda × comissao/100.
+  const valorComissao = precoVenda - precoBase;
+  // MARGEM DE LUCRO REAL: a fatia do PREÇO DE VENDA que é lucro de verdade — bem
+  // diferente do markup (que é a fatia aplicada em cima do CUSTO). Ex.: custo R$36,68 com
+  // 100% de markup vira preço R$73,36 — o lucro (R$36,68) é 100% do custo, mas é só 50%
+  // do preço de venda, por isso a margem real dá 50%, não 100%.
+  // Margem de lucro real (%) = (Lucro / Preço de venda) × 100
+  const margemReal = precoVenda > 0 ? (lucro / precoVenda) * 100 : 0;
 
   document.getElementById('calcOutFilamento').textContent = 'R$ ' + fmtMoeda(custoFilamento);
   document.getElementById('calcOutEnergia').textContent = 'R$ ' + fmtMoeda(custoEnergia);
   document.getElementById('calcOutEmbalagem').textContent = 'R$ ' + fmtMoeda(embalagem);
   document.getElementById('calcOutDesgaste').textContent = 'R$ ' + fmtMoeda(custoDesgaste);
-  document.getElementById('calcOutCustoTotal').textContent = 'R$ ' + fmtMoeda(custoBase);
-  document.getElementById('calcOutMargem').textContent = 'R$ ' + fmtMoeda(valorMargem);
+  document.getElementById('calcOutCustoTotal').textContent = 'R$ ' + fmtMoeda(custoTotal);
+  document.getElementById('calcOutMarkup').textContent = fmtMoeda(markup).replace(/,00$/, '') + '%';
+  document.getElementById('calcOutLucro').textContent = 'R$ ' + fmtMoeda(lucro);
+  document.getElementById('calcOutMargemReal').textContent = fmtMoeda(margemReal) + '%';
   document.getElementById('calcOutComissao').textContent = 'R$ ' + fmtMoeda(valorComissao);
   document.getElementById('calcOutPrecoVenda').textContent = 'R$ ' + fmtMoeda(precoVenda);
   document.getElementById('calcOutQtdLabel').textContent = String(qtd);
@@ -61,4 +93,3 @@ function usarPrecoNoProduto(){
   document.getElementById('fpPrecoCusto').value = custoTotalTxt;
   if(peso) document.getElementById('fpPeso').value = unidadePeso === 'kg' ? (parseFloat(peso) * 1000) : peso;
 }
-

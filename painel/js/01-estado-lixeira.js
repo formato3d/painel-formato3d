@@ -166,10 +166,10 @@ function renderLixeira(){
     const diasRestantes = Math.max(0, DIAS_LIXEIRA - diasPassados);
     const dataExcFmt = String(dataExc.getDate()).padStart(2,'0') + '/' + String(dataExc.getMonth()+1).padStart(2,'0') + '/' + dataExc.getFullYear();
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="badge">${esc(rotulo)}</span></td>
-      <td>${esc(descreverItemLixeira(tipo, item))}</td>
-      <td>${dataExcFmt}</td>
-      <td>${diasRestantes} dia${diasRestantes === 1 ? '' : 's'}</td>
+    tr.innerHTML = `<td data-label="Tipo"><span class="badge">${esc(rotulo)}</span></td>
+      <td data-label="Descrição">${esc(descreverItemLixeira(tipo, item))}</td>
+      <td data-label="Excluído em">${dataExcFmt}</td>
+      <td data-label="Dias até apagar de vez">${diasRestantes} dia${diasRestantes === 1 ? '' : 's'}</td>
       <td class="acoes"><button class="btn-icon" onclick="restaurarItemLixeira('${tipo}','${item.id}')" title="Restaurar">↺ Restaurar</button></td>`;
     corpo.appendChild(tr);
   });

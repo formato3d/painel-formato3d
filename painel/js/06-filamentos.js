@@ -62,8 +62,8 @@ function renderFilamentos(){
     const qtd = Number(f.quantidadeGramas) || 0;
     const alerta = f.alertaBaixoGramas !== undefined && f.alertaBaixoGramas !== '' ? Number(f.alertaBaixoGramas) : 200;
     const baixo = qtd <= alerta;
-    tr.innerHTML = `<td>${esc(f.cor)}</td><td>${esc(f.material || '—')}</td>
-      <td><span class="badge ${baixo ? 'estoque-baixo' : 'estoque-ok'}">${qtd} g</span></td>
+    tr.innerHTML = `<td data-label="Cor">${esc(f.cor)}</td><td data-label="Material">${esc(f.material || '—')}</td>
+      <td data-label="Estoque"><span class="badge ${baixo ? 'estoque-baixo' : 'estoque-ok'}">${qtd} g</span></td>
       <td class="acoes">
         <button class="btn-icon" onclick="abrirFormFilamento('${f.id}')" title="Editar">✎</button>
         <button class="btn-icon danger" onclick="excluirFilamento('${f.id}')" title="Excluir">✕</button>
@@ -72,4 +72,3 @@ function renderFilamentos(){
   });
   document.getElementById('contagemFilamentos').textContent = filamentosAtivos().length;
 }
-

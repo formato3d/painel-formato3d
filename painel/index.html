@@ -955,12 +955,12 @@
     </table>
   </section>
 
-  <!-- ============ CALCULADORA 3D ============ -->
+    <!-- ============ CALCULADORA 3D ============ -->
   <section id="tab-calc3d" class="tab-section hidden">
     <div class="panel-header">
       <h2 class="section-title">🧮 Calculadora 3D</h2>
     </div>
-    <p class="modal-sub" style="margin-top:-8px;">Calcule o custo real da sua peça 3D incluindo filamento, energia, embalagem, desgaste da impressora, comissão e lucro.</p>
+    <p class="modal-sub" style="margin-top:-8px;">Calcule o custo real da sua peça 3D incluindo filamento, energia, embalagem e depreciação da impressora — e veja o markup aplicado, o lucro em reais e a margem de lucro real, sem confundir os dois.</p>
 
     <div class="calc-wrap">
       <div class="box">
@@ -992,23 +992,27 @@
         </div>
         <div class="form-row-2">
           <div class="field"><label>Custo de embalagem</label><input id="calcEmbalagem" placeholder="R$ 0,00" value="2,00" oninput="calcularOrcamento3D()"></div>
-          <div class="field"><label>Desgaste por hora</label><input id="calcDesgaste" placeholder="R$ 0,00" value="1,50" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Valor da impressora (R$)</label><input id="calcValorImpressora" placeholder="R$ 0,00" value="5000,00" oninput="calcularOrcamento3D()"></div>
         </div>
         <div class="form-row-2">
-          <div class="field"><label>Margem de lucro (%)</label><input id="calcMargem" type="number" min="0" step="1" value="100" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Vida útil estimada (horas)</label><input id="calcVidaUtil" type="number" min="1" step="1" value="5000" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Depreciação por hora (calculada)</label><input id="calcDepreciacaoHora" class="campo-travado" readonly value="R$ 0,00/h"></div>
+        </div>
+        <div class="form-row-2">
+          <div class="field"><label>Markup (%)</label><input id="calcMarkup" type="number" min="0" step="1" value="100" oninput="calcularOrcamento3D()"></div>
           <div class="field"><label>Comissão do ponto (%)</label><input id="calcComissao" type="number" min="0" max="95" step="1" value="0" oninput="calcularOrcamento3D()"></div>
         </div>
         <div class="form-row-2">
           <div class="field"><label>Modelo da impressora</label>
             <select id="calcModeloImpressora" onchange="aplicarModeloImpressora()">
               <option value="">Selecionar modelo</option>
-              <option value="1500">Bambu Lab A1</option>
+              <option value="150">Bambu Lab A1</option>
               <option value="outro">Outro / não sei</option>
             </select>
           </div>
-          <div class="field"><label>Consumo da impressora (W)</label><input id="calcConsumo" type="number" min="0" step="1" value="150" oninput="calcularOrcamento3D()"></div>
+          <div class="field"><label>Consumo médio estimado (W)</label><input id="calcConsumo" type="number" min="0" step="1" value="150" oninput="calcularOrcamento3D()"></div>
         </div>
-        <div class="calc-note">⚠ Valores médios de consumo. Ajuste conforme sua realidade.</div>
+        <div class="calc-note">⚠ Consumo (W), valor da impressora e vida útil são estimativas — confira o manual, a etiqueta ou a nota fiscal da sua máquina pra um preço mais preciso. A depreciação por hora é sempre calculada a partir do valor da impressora e da vida útil, nunca digitada direto.</div>
       </div>
 
       <div class="calc-result">
@@ -1016,12 +1020,15 @@
         <div class="calc-linha"><span>Custo do filamento</span><span id="calcOutFilamento">R$ 0,00</span></div>
         <div class="calc-linha"><span>Custo de energia</span><span id="calcOutEnergia">R$ 0,00</span></div>
         <div class="calc-linha"><span>Embalagem</span><span id="calcOutEmbalagem">R$ 0,00</span></div>
-        <div class="calc-linha"><span>Desgaste da impressora</span><span id="calcOutDesgaste">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Depreciação da impressora</span><span id="calcOutDesgaste">R$ 0,00</span></div>
         <div class="calc-linha destaque"><span>Custo total por peça</span><span id="calcOutCustoTotal">R$ 0,00</span></div>
-        <div class="calc-linha"><span>Margem de lucro</span><span id="calcOutMargem">R$ 0,00</span></div>
+        <div class="calc-linha"><span>Markup aplicado</span><span id="calcOutMarkup">0%</span></div>
+        <div class="calc-linha"><span>Lucro por peça</span><span id="calcOutLucro">R$ 0,00</span></div>
+        <div class="calc-linha destaque"><span>Margem de lucro real</span><span id="calcOutMargemReal">0%</span></div>
         <div class="calc-linha"><span>Comissão do ponto</span><span id="calcOutComissao">R$ 0,00</span></div>
         <div class="calc-linha total"><span>Preço de venda sugerido</span><span id="calcOutPrecoVenda">R$ 0,00</span></div>
         <div class="calc-linha"><span>Total do lote (<span id="calcOutQtdLabel">1</span> peça(s))</span><span id="calcOutTotalLote">R$ 0,00</span></div>
+        <div class="calc-note">Markup é aplicado sobre o CUSTO pra chegar no preço de venda. Margem de lucro real é a fatia do PREÇO DE VENDA que é lucro de verdade — são coisas diferentes (por isso 100% de markup vira 50% de margem real).</div>
         <div class="form-actions" style="margin-top:14px;">
           <button class="btn" onclick="usarPrecoNoProduto()">Usar como novo produto</button>
         </div>

@@ -547,16 +547,45 @@
     .panel-header{ flex-direction:column; align-items:stretch; }
     .panel-actions{ width:100%; }
     .panel-actions input[type="text"], .panel-actions input[type="search"], .panel-actions select{ flex:1; min-width:0; }
-    table.data, table.itens-orc, table.po-items, table.po-client, table.po-totals{ display:block; overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch; }
+    table.po-items, table.po-client, table.po-totals{ display:block; overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch; }
     .modal-overlay{ padding:14px 8px; }
     .modal-card{ padding:16px; max-width:100%; }
     .calc-wrap{ grid-template-columns:1fr; }
     .calc-result{ position:static; }
+    /* Tabelas de dados (Clientes, Produtos, Orçamentos, Financeiro, itens do
+       orçamento etc.) na tela do celular: em vez de precisar rolar pro lado pra
+       ver as colunas escondidas, cada linha vira um "cartão" com os campos
+       empilhados — o rótulo da coluna (vindo do atributo data-label, escrito
+       pelo JS junto com cada célula ao montar a linha) aparece pequeno em cima
+       do valor. Fica tudo visível de uma vez, sem rolagem horizontal, e ainda
+       organizado por rótulo — não uma pilha solta de números. Só entra em
+       "screen" (não em print) pra não bagunçar o orçamento/recibo impresso. */
+    table.data, table.itens-orc{ display:block; white-space:normal; }
+    table.data thead, table.itens-orc thead{ display:none; }
+    table.data tbody, table.itens-orc tbody{ display:block; }
+    table.data tr, table.itens-orc tr{
+      display:block; margin-bottom:10px; padding:10px 12px;
+      border:1px solid var(--line); border-radius:10px; background:var(--card);
+    }
+    table.data tr.empty-row, table.itens-orc tr.empty-row{ padding:16px 12px; text-align:center; }
+    table.data tr.empty-row td, table.itens-orc tr.empty-row td{ display:block; border:none; padding:0; }
+    table.data td, table.itens-orc td{
+      display:block; padding:6px 0; border-bottom:1px solid var(--line);
+      text-align:left; white-space:normal; vertical-align:top;
+    }
+    table.data td:last-child, table.itens-orc td:last-child{ border-bottom:none; padding-bottom:0; }
+    table.data td[data-label]::before, table.itens-orc td[data-label]::before{
+      content:attr(data-label); display:block; font-size:11px; font-weight:600; color:var(--gray); margin-bottom:3px;
+    }
+    table.data td.acoes{ display:flex; justify-content:flex-end; gap:8px; border-bottom:none; padding-top:8px; text-align:right; }
+    table.itens-orc td.acoes-col{ display:flex; justify-content:flex-end; gap:10px; border-bottom:none; padding-top:8px; text-align:right; white-space:normal; }
+    table.itens-orc td.qtd-col, table.itens-orc td.valor-col, table.itens-orc td.custo-col, table.itens-orc td.del-col{ width:auto; }
+    table.itens-orc td.total-item{ text-align:left; padding-right:0; }
   }
   @media screen and (max-width:420px){
     .cards-grid{ grid-template-columns:1fr; }
   }
-
+    
   footer.rodape{ text-align:center; color:var(--gray); font-size:11.5px; padding:20px 0 10px 0; }
 
   /* ===== Login (área restrita) ===== */

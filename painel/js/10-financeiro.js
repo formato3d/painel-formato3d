@@ -483,13 +483,13 @@ function renderFinanceiro(){
       ? ` <span class="badge parcela" title="Parcela ${f.parcelaNum} de ${f.parcelaTotal} desta compra/venda">${f.parcelaNum}/${f.parcelaTotal}</span>`
       : '';
     tr.innerHTML = `
-      <td>${esc(f.descricao)}${parcelaBadge}</td>
-      <td>${esc(f.categoria)}</td>
-      <td>${esc(nomeClienteOpcional(f.clienteId))}</td>
-      <td>${fmtDataExibir(f.vencimento)}</td>
-      <td>R$ ${fmtMoeda(f.valor)}</td>
-      <td>${statusBadge}${avisoDessinc}</td>
-      <td class="anexos-cell">${anexos || '—'}</td>
+      <td data-label="Descrição">${esc(f.descricao)}${parcelaBadge}</td>
+      <td data-label="Categoria">${esc(f.categoria)}</td>
+      <td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td>
+      <td data-label="Vencimento">${fmtDataExibir(f.vencimento)}</td>
+      <td data-label="Valor">R$ ${fmtMoeda(f.valor)}</td>
+      <td data-label="Status">${statusBadge}${avisoDessinc}</td>
+      <td class="anexos-cell" data-label="Anexos">${anexos || '—'}</td>
       <td class="acoes">
         <button class="btn-icon" onclick="alternarStatusFinanceiro('${f.id}')" title="Marcar como ${f.status === 'pendente' ? 'pago/recebido' : 'pendente'}">${f.status === 'pendente' ? '✓' : '↺'}</button>
         ${dessincronizado ? `<button class="btn-icon" onclick="atualizarFinanceiroComOrcamento('${f.id}')" title="Atualizar lançamento com os dados atuais do orçamento">🔄</button>` : ''}

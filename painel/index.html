@@ -1158,13 +1158,15 @@ Obrigado pela preferência!</textarea></div>
     <h2 class="section-title">Contas a pagar e receber</h2>
     <div class="cards-grid" id="cardsResumoFinanceiro" style="margin-bottom:20px;"></div>
 
-    <div class="panel-header">
+    <div class="subtabs" id="subtabsFinanceiro" style="margin-bottom:14px;">
+      <button type="button" class="subtab active" id="subtabFinPagar" onclick="mostrarAbaFinanceiro('pagar')">A pagar</button>
+      <button type="button" class="subtab" id="subtabFinReceber" onclick="mostrarAbaFinanceiro('receber')">A receber</button>
+      <button type="button" class="subtab" id="subtabFinCompras" onclick="mostrarAbaFinanceiro('compras')">Compras</button>
+      <button type="button" class="subtab" id="subtabFinConciliacao" onclick="mostrarAbaFinanceiro('conciliacao')">Conciliação bancária</button>
+    </div>
+
+    <div class="panel-header" id="painelTopoFinanceiro">
       <div class="panel-actions">
-        <div class="subtabs" id="subtabsFinanceiro">
-          <button type="button" class="subtab active" id="subtabFinPagar" onclick="mostrarAbaFinanceiro('pagar')">A pagar</button>
-          <button type="button" class="subtab" id="subtabFinReceber" onclick="mostrarAbaFinanceiro('receber')">A receber</button>
-          <button type="button" class="subtab" id="subtabFinCompras" onclick="mostrarAbaFinanceiro('compras')">Compras</button>
-        </div>
         <select id="filtroMesFin" onchange="renderFinanceiro()"></select>
         <select id="filtroStatusFin" onchange="renderFinanceiro()">
           <option value="">Todos os status</option>
@@ -1179,6 +1181,18 @@ Obrigado pela preferência!</textarea></div>
     </div>
 
     <div id="blocoContasFinanceiro">
+    <div class="panel-header" style="margin-top:0;">
+      <div class="panel-actions">
+        <input type="text" id="filtroBuscaFin" placeholder="Buscar por descrição ou categoria..." oninput="renderFinanceiro()" style="min-width:220px;">
+        <select id="filtroClienteFin" onchange="renderFinanceiro()"><option value="">Todos os clientes</option></select>
+      </div>
+      <div class="panel-actions">
+        <label style="font-size:12px;color:var(--gray);align-self:center;">Vencimento de</label>
+        <input type="text" id="filtroVencimentoDe" placeholder="dd/mm/aaaa" oninput="renderFinanceiro()" style="width:120px;">
+        <label style="font-size:12px;color:var(--gray);align-self:center;">até</label>
+        <input type="text" id="filtroVencimentoAte" placeholder="dd/mm/aaaa" oninput="renderFinanceiro()" style="width:120px;">
+      </div>
+    </div>
     <div class="cards-grid" id="cardsTipoFinanceiro" style="margin-bottom:20px;"></div>
 
     <div id="formFinanceiroWrap" class="form-card hidden">
@@ -1252,7 +1266,7 @@ Obrigado pela preferência!</textarea></div>
     </div>
 
     <table class="data">
-      <thead><tr><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Anexos</th><th></th></tr></thead>
+      <thead><tr><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Data efetiva</th><th>Valor</th><th>Status</th><th>Anexos</th><th></th></tr></thead>
       <tbody id="corpoTabelaFinanceiro"></tbody>
     </table>
     </div>
@@ -1299,10 +1313,19 @@ Obrigado pela preferência!</textarea></div>
       <div class="panel-header">
         <div class="panel-actions">
           <select id="filtroMesCompras" onchange="renderCompras()"></select>
+          <input type="text" id="filtroBuscaCompras" placeholder="Buscar por descrição ou fornecedor..." oninput="renderCompras()" style="min-width:220px;">
         </div>
         <div class="panel-actions">
           <button class="btn secondary" onclick="exportarComprasExcel()">⬇ Exportar Excel</button>
           <button class="btn" onclick="abrirFormCompra()">+ Nova compra</button>
+        </div>
+      </div>
+      <div class="panel-header" style="margin-top:0;">
+        <div class="panel-actions">
+          <label style="font-size:12px;color:var(--gray);align-self:center;">Data de</label>
+          <input type="text" id="filtroDataCompraDe" placeholder="dd/mm/aaaa" oninput="renderCompras()" style="width:120px;">
+          <label style="font-size:12px;color:var(--gray);align-self:center;">até</label>
+          <input type="text" id="filtroDataCompraAte" placeholder="dd/mm/aaaa" oninput="renderCompras()" style="width:120px;">
         </div>
       </div>
 
@@ -1354,6 +1377,66 @@ Obrigado pela preferência!</textarea></div>
         <thead><tr><th>Descrição</th><th>Fornecedor</th><th>Categoria</th><th>Data</th><th>Valor</th><th>Forma de pagamento</th><th>Comprovante</th><th></th></tr></thead>
         <tbody id="corpoTabelaCompras"></tbody>
       </table>
+    </div>
+
+    <!-- ============ CONCILIAÇÃO BANCÁRIA ============
+         Importa o extrato do banco (OFX ou CSV/Excel), compara com o que já está
+         cadastrado em Contas a pagar/receber e Compras, e mostra 3 grupos: o que já bate
+         (conciliado), contas pendentes que parecem ser aquela transação (confirma com um
+         clique) e transações que não existem ainda no painel (cadastra na hora, no lugar
+         certo). Tudo fica só na tela — nada aqui é salvo sozinho; o que vira conciliado ou
+         é cadastrado passa a existir de verdade no Financeiro/Compras normalmente. -->
+    <div id="blocoConciliacao" class="hidden">
+      <div class="calc-note" style="margin-bottom:16px;">Envie o extrato do seu banco (arquivo .ofx, ou .csv/.xlsx exportado do internet banking) e o painel compara cada transação com o que já está cadastrado em Contas a pagar, A receber e Compras. O que já bate aparece como <b>Conciliado</b>; contas pendentes que parecem ser aquela transação aparecem como <b>Pendente encontrado</b> (confirme com um clique, informando a data do banco como data efetiva); e o que ainda não existe no painel aparece como <b>Sem correspondência</b>, com um botão pra cadastrar direto no lugar certo (A pagar, A receber ou Compra).</div>
+
+      <div id="conciliacaoUploadBloco" class="form-card">
+        <h3>Importar extrato</h3>
+        <div class="file-upload" id="conciliacaoUploadWrap">
+          <input type="file" id="conciliacaoArquivo" accept=".ofx,.csv,.xlsx,.xls" onchange="processarArquivoConciliacao(this)">
+          <div class="ph-txt"><b>Selecionar arquivo do banco</b><br>.ofx, .csv ou .xlsx exportado do internet banking</div>
+        </div>
+      </div>
+
+      <div id="conciliacaoMapeamento" class="form-card hidden">
+        <h3>Confirme as colunas do arquivo</h3>
+        <label class="chk"><input type="checkbox" id="concCsvTemCabecalho" checked onchange="atualizarPreviewMapeamentoConciliacao()"> A primeira linha é o título das colunas</label>
+        <div class="form-grid" style="margin-top:10px;">
+          <div class="field"><label>Coluna da data</label><select id="concColData" onchange="atualizarPreviewMapeamentoConciliacao()"></select></div>
+          <div class="field"><label>Coluna da descrição</label><select id="concColDescricao" onchange="atualizarPreviewMapeamentoConciliacao()"></select></div>
+          <div class="field"><label>Coluna do valor</label><select id="concColValor" onchange="atualizarPreviewMapeamentoConciliacao()"></select></div>
+          <div class="field"><label>Como interpretar o valor</label>
+            <select id="concModoValor">
+              <option value="sinal">Já vem com sinal (negativo = saída, positivo = entrada)</option>
+              <option value="saida">Todos os valores dessa coluna são saída (pagamento/compra)</option>
+              <option value="entrada">Todos os valores dessa coluna são entrada (recebimento)</option>
+            </select>
+          </div>
+        </div>
+        <div class="calc-note">Se o extrato tiver colunas separadas de entrada e saída, escolha aqui a que tiver os valores que você quer importar — dá pra importar e conciliar as duas colunas em duas vezes, uma de cada vez.</div>
+        <div style="overflow:auto; margin-top:10px;">
+          <table class="data" id="concPreviewTabela"></table>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="processarMapeamentoCsvConciliacao()">Processar arquivo</button>
+          <button class="btn secondary" onclick="cancelarMapeamentoCsvConciliacao()">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="conciliacaoResultadoBloco" class="hidden">
+        <div class="cards-grid" id="cardsResumoConciliacao" style="margin:20px 0;"></div>
+        <div class="panel-header" style="margin-top:0;">
+          <div class="panel-actions">
+            <strong>Resultado da conciliação</strong>
+          </div>
+          <div class="panel-actions">
+            <button class="btn secondary" onclick="reiniciarConciliacao()">⟲ Importar outro extrato</button>
+          </div>
+        </div>
+        <table class="data">
+          <thead><tr><th>Data</th><th>Descrição do banco</th><th>Valor</th><th>Status</th><th>Ação</th></tr></thead>
+          <tbody id="corpoTabelaConciliacao"></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -1529,6 +1612,7 @@ Obrigado pela preferência!</textarea></div>
 <script src="js/11-dashboard-relatorios.js"></script>
 <script src="js/12-exportar-excel.js"></script>
 <script src="js/14-compras.js"></script>
+  <script src="js/15-conciliacao.js"></script>
 <script src="js/13-inicializacao.js"></script>
 
 </body>

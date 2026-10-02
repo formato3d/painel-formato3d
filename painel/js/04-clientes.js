@@ -84,12 +84,13 @@ function renderClientes(){
   document.getElementById('contagemClientes').textContent = clientesAtivos().length;
 }
 function atualizarSelectsClientes(){
-  const selects = [document.getElementById('foCliente'), document.getElementById('ffCliente')];
+  const selects = [document.getElementById('foCliente'), document.getElementById('ffCliente'), document.getElementById('filtroClienteFin')];
   selects.forEach(sel => {
     if(!sel) return;
     const atual = sel.value;
-    const isFin = sel.id === 'ffCliente';
-    sel.innerHTML = (isFin ? '<option value="">—</option>' : '<option value="">Selecione um cliente...</option>') +
+    const isFiltro = sel.id === 'filtroClienteFin';
+    const isFin = sel.id === 'ffCliente' || isFiltro;
+    sel.innerHTML = (isFiltro ? '<option value="">Todos os clientes</option>' : (isFin ? '<option value="">—</option>' : '<option value="">Selecione um cliente...</option>')) +
       clientesAtivos().map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
     sel.value = atual;
   });

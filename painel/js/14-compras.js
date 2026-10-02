@@ -163,12 +163,28 @@ function preencherFiltroMesCompras(){
   sel.innerHTML = '<option value="">Todos os meses</option>' + chaves.map(c => `<option value="${c}">${rotuloMesFinanceiro(c)}</option>`).join('');
   if(chaves.includes(atual)) sel.value = atual;
 }
-// Lista que respeita o filtro de mês atual — usada tanto pra desenhar a tabela quanto
-// pra exportar, igual financeiroFiltradoAtual.
+// Lista que respeita os filtros atuais da tela: mês, busca por descrição/fornecedor/
+// categoria e faixa de data — usada tanto pra desenhar a tabela quanto pra exportar,
+// igual financeiroFiltradoAtual.
 function comprasFiltradoAtual(){
   const mesAno = document.getElementById('filtroMesCompras').value;
+  const elBusca = document.getElementById('filtroBuscaCompras');
+  const busca = elBusca ? elBusca.value.trim().toLowerCase() : '';
+  const elDataDe = document.getElementById('filtroDataCompraDe');
+  const elDataAte = document.getElementById('filtroDataCompraAte');
+  const dataDe = elDataDe ? paraDataObj(elDataDe.value.trim()) : null;
+  const dataAte = elDataAte ? paraDataObj(elDataAte.value.trim()) : null;
   return comprasAtivos()
     .filter(c => !mesAno || chaveMesCompra(c) === mesAno)
+    .filter(c => !busca || (c.descricao||'').toLowerCase().includes(busca) || (c.fornecedor||'').toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca))
+    .filter(c => {
+      if(!dataDe && !dataAte) return true;
+      const d = paraDataObj(c.data);
+      if(!d) return false;
+      if(dataDe && d < dataDe) return false;
+      if(dataAte && d > dataAte) return false;
+      return true;
+    })
     .sort((a,b) => (paraDataObj(b.data) || 0) - (paraDataObj(a.data) || 0));
 }
 function renderCompras(){

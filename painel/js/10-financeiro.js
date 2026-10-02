@@ -357,6 +357,26 @@ function atualizarPreviewDescontoConfirmarPagamento(){
   const desconto = parseMoeda(document.getElementById('cfDesconto').value);
   previewEl.textContent = desconto > 0 ? ('Valor líquido que entra no Saldo real: R$ ' + fmtMoeda(Math.max(0, valor - desconto))) : '';
 }
+// Efetiva de verdade um lançamento financeiro como pago/recebido — é o motor por trás
+// do pop-up de confirmação (confirmarPagamentoSalvar) e também é reaproveitado pela
+// Conciliação bancária (ver 15-conciliacao.js), pra garantir que confirmar um pagamento
+// a partir do extrato do banco siga exatamente as mesmas regras (valorOriginal
+// preservado, "foto" do orçamento vinculado, status do orçamento atualizado etc.) em vez
+// de duplicar essa lógica em outro lugar.
+function efetivarPagamentoFinanceiro_(f, { valorLiquido, data, formaPagamento, desconto }){
+  if(f.valorOriginal === undefined) f.valorOriginal = f.valor;
+  f.valor = valorLiquido;
+  f.status = 'pago';
+  f.dataPagamento = data;
+  f.formaPagamentoConfirmada = formaPagamento;
+  f.descontoMaquininha = desconto || 0;
+  // "Foto" do total do orçamento no exato momento do pagamento — ver financeiroDessincronizado.
+  if(f.orcamentoId){
+    const oVinculado = state.orcamentos.find(x => x.id === f.orcamentoId);
+    if(oVinculado) f.totalOrcamentoNoPagamento = oVinculado.total;
+  }
+  concluirOrcamentoVinculado_(f);
+}
 function confirmarPagamentoSalvar(){
   const f = state.financeiro.find(x => x.id === confirmarPagamentoId);
   if(!f) return;
@@ -369,18 +389,7 @@ function confirmarPagamentoSalvar(){
   const desconto = mostraDesconto ? parseMoeda(document.getElementById('cfDesconto').value) : 0;
   const valorLiquido = Math.max(0, valorInformado - desconto);
 
-  if(f.valorOriginal === undefined) f.valorOriginal = f.valor;
-  f.valor = valorLiquido;
-  f.status = 'pago';
-  f.dataPagamento = dataInformada;
-  f.formaPagamentoConfirmada = formaPagamento;
-  f.descontoMaquininha = desconto || 0;
-  // "Foto" do total do orçamento no exato momento do pagamento — ver financeiroDessincronizado.
-  if(f.orcamentoId){
-    const oVinculado = state.orcamentos.find(x => x.id === f.orcamentoId);
-    if(oVinculado) f.totalOrcamentoNoPagamento = oVinculado.total;
-  }
-  concluirOrcamentoVinculado_(f);
+  efetivarPagamentoFinanceiro_(f, { valorLiquido, data: dataInformada, formaPagamento, desconto });
 
   const ehReceber = f.tipo === 'receber';
   marcarAlterado();
@@ -408,13 +417,24 @@ function mostrarAbaFinanceiro(tipo){
   document.getElementById('subtabFinPagar').classList.toggle('active', tipo === 'pagar');
   document.getElementById('subtabFinReceber').classList.toggle('active', tipo === 'receber');
   document.getElementById('subtabFinCompras').classList.toggle('active', tipo === 'compras');
+  const elSubtabConc = document.getElementById('subtabFinConciliacao');
+  if(elSubtabConc) elSubtabConc.classList.toggle('active', tipo === 'conciliacao');
   // "Compras" é uma seção própria — campos e tabela diferentes de Financeiro (ver
   // 14-compras.js) — então em vez de reaproveitar a tabela/formulário de Contas a
-  // pagar/receber, mostra o bloco certo e esconde o outro.
-  document.getElementById('blocoContasFinanceiro').classList.toggle('hidden', tipo === 'compras');
+  // pagar/receber, mostra o bloco certo e esconde o outro. "Conciliação" (ver
+  // 15-conciliacao.js) é uma terceira seção própria, sem nada a ver com as duas.
+  document.getElementById('blocoContasFinanceiro').classList.toggle('hidden', tipo === 'compras' || tipo === 'conciliacao');
   document.getElementById('blocoCompras').classList.toggle('hidden', tipo !== 'compras');
+  const elBlocoConc = document.getElementById('blocoConciliacao');
+  if(elBlocoConc) elBlocoConc.classList.toggle('hidden', tipo !== 'conciliacao');
+  // A barra de filtros/botões de Contas a pagar/receber (mês, status, "+ Nova conta" etc.)
+  // só faz sentido pra essas duas — na Conciliação ela só ocuparia espaço sem servir pra nada.
+  const elTopo = document.getElementById('painelTopoFinanceiro');
+  if(elTopo) elTopo.classList.toggle('hidden', tipo === 'conciliacao');
   if(tipo === 'compras'){
     renderCompras();
+  } else if(tipo === 'conciliacao'){
+    if(typeof renderConciliacaoTabela === 'function') renderConciliacaoTabela();
   } else {
     renderFinanceiro();
   }
@@ -445,16 +465,35 @@ function preencherFiltroMesFin(){
   sel.innerHTML = '<option value="">Todos os meses</option>' + chaves.map(c => `<option value="${c}">${rotuloMesFinanceiro(c)}</option>`).join('');
   if(chaves.includes(atual)) sel.value = atual;
 }
-// Lista que respeita os filtros atuais da tela: a sub-aba ativa (pagar/receber), o mês e o
-// status escolhidos. Usada tanto pra desenhar a tabela quanto pra exportar — a planilha
-// exportada é sempre exatamente o que está na tela.
+// Lista que respeita os filtros atuais da tela: a sub-aba ativa (pagar/receber), o mês, o
+// status, a busca por descrição/categoria, o cliente e a faixa de vencimento escolhidos.
+// Usada tanto pra desenhar a tabela quanto pra exportar — a planilha exportada é sempre
+// exatamente o que está na tela.
 function financeiroFiltradoAtual(){
   const mesAno = document.getElementById('filtroMesFin').value;
   const filtroStatus = document.getElementById('filtroStatusFin').value;
+  const elBusca = document.getElementById('filtroBuscaFin');
+  const busca = elBusca ? elBusca.value.trim().toLowerCase() : '';
+  const elCliente = document.getElementById('filtroClienteFin');
+  const clienteId = elCliente ? elCliente.value : '';
+  const elVencDe = document.getElementById('filtroVencimentoDe');
+  const elVencAte = document.getElementById('filtroVencimentoAte');
+  const vencDe = elVencDe ? paraDataObj(elVencDe.value.trim()) : null;
+  const vencAte = elVencAte ? paraDataObj(elVencAte.value.trim()) : null;
   return financeiroAtivos()
     .filter(f => f.tipo === abaFinanceiroAtiva)
     .filter(f => !filtroStatus || f.status === filtroStatus)
-    .filter(f => !mesAno || chaveMesFinanceiro(f) === mesAno);
+    .filter(f => !mesAno || chaveMesFinanceiro(f) === mesAno)
+    .filter(f => !busca || (f.descricao||'').toLowerCase().includes(busca) || (f.categoria||'').toLowerCase().includes(busca))
+    .filter(f => !clienteId || f.clienteId === clienteId)
+    .filter(f => {
+      if(!vencDe && !vencAte) return true;
+      const d = paraDataObj(f.vencimento);
+      if(!d) return false;
+      if(vencDe && d < vencDe) return false;
+      if(vencAte && d > vencAte) return false;
+      return true;
+    });
 }
 function renderFinanceiro(){
   preencherFiltroMesFin();
@@ -462,7 +501,7 @@ function renderFinanceiro(){
   tbody.innerHTML = '';
   const lista = financeiroFiltradoAtual();
   if(lista.length === 0){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Nenhum lançamento encontrado.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Nenhum lançamento encontrado.</td></tr>';
   }
   lista.forEach(f => {
     const tr = document.createElement('tr');
@@ -482,11 +521,16 @@ function renderFinanceiro(){
     const parcelaBadge = f.parcelaTotal
       ? ` <span class="badge parcela" title="Parcela ${f.parcelaNum} de ${f.parcelaTotal} desta compra/venda">${f.parcelaNum}/${f.parcelaTotal}</span>`
       : '';
+    // Data em que a transação foi efetivamente concluída — diferente do Vencimento (a data
+    // combinada/prevista lá no orçamento). Só existe depois que o pagamento é confirmado
+    // (ver efetivarPagamentoFinanceiro_); antes disso, mostra "—".
+    const dataPagamentoTxt = f.status === 'pago' && f.dataPagamento ? fmtDataExibir(f.dataPagamento) : '—';
     tr.innerHTML = `
       <td data-label="Descrição">${esc(f.descricao)}${parcelaBadge}</td>
       <td data-label="Categoria">${esc(f.categoria)}</td>
       <td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td>
       <td data-label="Vencimento">${fmtDataExibir(f.vencimento)}</td>
+      <td data-label="Data efetiva">${dataPagamentoTxt}</td>
       <td data-label="Valor">R$ ${fmtMoeda(f.valor)}</td>
       <td data-label="Status">${statusBadge}${avisoDessinc}</td>
       <td class="anexos-cell" data-label="Anexos">${anexos || '—'}</td>

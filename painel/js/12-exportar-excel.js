@@ -39,6 +39,7 @@ function exportarFinanceiroExcel(){
       'Categoria': f.categoria || '',
       'Cliente': nomeClienteOpcional(f.clienteId),
       'Vencimento': f.vencimento ? fmtDataExibir(f.vencimento) : '',
+      'Data efetiva (pagamento)': (f.status === 'pago' && f.dataPagamento) ? fmtDataExibir(f.dataPagamento) : '',
       'Valor (R$)': f.valor || 0,
       'Parcela': f.parcelaTotal ? (f.parcelaNum + '/' + f.parcelaTotal) : '',
       'Status': f.status === 'pago' ? 'Pago/Recebido' : 'Pendente',
@@ -73,4 +74,3 @@ function exportarComprasExcel(){
   XLSX.utils.book_append_sheet(wb, ws, 'Compras');
   XLSX.writeFile(wb, 'compras_formato3d_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
-

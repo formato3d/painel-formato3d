@@ -217,23 +217,50 @@ function reiniciarConciliacao(){
   document.getElementById('conciliacaoMapeamento').classList.add('hidden');
   document.getElementById('conciliacaoUploadBloco').classList.remove('hidden');
 }
+// Compara a data de um lançamento JÁ PAGO com a data do banco, mas só quando dá pra
+// confiar nela: lançamentos marcados como pagos ANTES da coluna "data efetiva" existir no
+// painel não têm dataPagamento salva (nem como cair pro vencimento, que pode ter sido bem
+// diferente do dia real do pagamento) — nesse caso aceita o match só pelo valor, sem
+// checar data, em vez de nunca encontrar esses lançamentos antigos e empurrar a pessoa a
+// cadastrar eles de novo pela conciliação (duplicando no Saldo real).
+function dataBateParaPagoConciliacao_(f, dataBanco){
+  if(!f.dataPagamento) return true;
+  return diferencaDiasConciliacao_(f.dataPagamento, dataBanco) <= CONCILIACAO_TOLERANCIA_DIAS;
+}
+// Quando nada "perto o bastante" (valor + data) é encontrado, ainda vale avisar se existe
+// algo com o MESMO valor em qualquer status/data no painel — pra pessoa conferir antes de
+// cadastrar de novo pela conciliação e acabar duplicando o valor no Saldo real (ver
+// saldoRealCaixa em 10-financeiro.js): é exatamente isso que deixa o saldo errado.
+function possivelDuplicataConciliacao_(l, valorAbs){
+  if(l.valor > 0){
+    const f = financeiroAtivos().find(x => x.tipo === 'receber' && Math.abs((x.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR);
+    if(f) return { tipo: 'Conta a receber', descricao: f.descricao, data: f.status === 'pago' ? (f.dataPagamento || f.vencimento) : f.vencimento, status: f.status };
+  } else {
+    const f = financeiroAtivos().find(x => x.tipo === 'pagar' && Math.abs((x.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR);
+    if(f) return { tipo: 'Conta a pagar', descricao: f.descricao, data: f.status === 'pago' ? (f.dataPagamento || f.vencimento) : f.vencimento, status: f.status };
+    const c = comprasAtivos().find(x => Math.abs((x.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR);
+    if(c) return { tipo: 'Compra', descricao: c.descricao, data: c.data, status: 'pago' };
+  }
+  return null;
+}
 function conciliarUmaLinhaBanco_(l){
-  const linha = { data: l.data, descricaoBanco: l.descricao, valor: l.valor, status: 'sem_correspondencia', matchTipo: null, matchId: null, matchDescricao: '', cadastroAberto: false };
+  const linha = { data: l.data, descricaoBanco: l.descricao, valor: l.valor, status: 'sem_correspondencia', matchTipo: null, matchId: null, matchDescricao: '', cadastroAberto: false, possivelDuplicata: null };
   const valorAbs = Math.abs(l.valor);
   if(valorAbs < CONCILIACAO_TOLERANCIA_VALOR){ linha.status = 'ignorado'; return linha; }
 
   if(l.valor > 0){
     // ENTRADA de dinheiro: só pode ser uma conta "a receber".
-    const pago = financeiroAtivos().find(f => f.tipo === 'receber' && f.status === 'pago' && Math.abs((f.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR && diferencaDiasConciliacao_(f.dataPagamento, l.data) <= CONCILIACAO_TOLERANCIA_DIAS);
+    const pago = financeiroAtivos().find(f => f.tipo === 'receber' && f.status === 'pago' && Math.abs((f.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR && dataBateParaPagoConciliacao_(f, l.data));
     if(pago){ linha.status = 'conciliado'; linha.matchTipo = 'receber'; linha.matchId = pago.id; linha.matchDescricao = pago.descricao; return linha; }
     const pendentes = financeiroAtivos().filter(f => f.tipo === 'receber' && f.status === 'pendente' && Math.abs((f.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR);
     if(pendentes.length){
       pendentes.sort((a,b) => diferencaDiasConciliacao_(a.vencimento, l.data) - diferencaDiasConciliacao_(b.vencimento, l.data));
       linha.status = 'pendente_encontrado'; linha.matchTipo = 'receber'; linha.matchId = pendentes[0].id; linha.matchDescricao = pendentes[0].descricao;
+      return linha;
     }
   } else {
     // SAÍDA de dinheiro: pode ser uma conta "a pagar" já cadastrada OU uma Compra.
-    const pago = financeiroAtivos().find(f => f.tipo === 'pagar' && f.status === 'pago' && Math.abs((f.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR && diferencaDiasConciliacao_(f.dataPagamento, l.data) <= CONCILIACAO_TOLERANCIA_DIAS);
+    const pago = financeiroAtivos().find(f => f.tipo === 'pagar' && f.status === 'pago' && Math.abs((f.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR && dataBateParaPagoConciliacao_(f, l.data));
     if(pago){ linha.status = 'conciliado'; linha.matchTipo = 'pagar'; linha.matchId = pago.id; linha.matchDescricao = pago.descricao; return linha; }
     const compra = comprasAtivos().find(c => Math.abs((c.valor||0) - valorAbs) < CONCILIACAO_TOLERANCIA_VALOR && diferencaDiasConciliacao_(c.data, l.data) <= CONCILIACAO_TOLERANCIA_DIAS);
     if(compra){ linha.status = 'conciliado'; linha.matchTipo = 'compra'; linha.matchId = compra.id; linha.matchDescricao = compra.descricao; return linha; }
@@ -241,8 +268,10 @@ function conciliarUmaLinhaBanco_(l){
     if(pendentes.length){
       pendentes.sort((a,b) => diferencaDiasConciliacao_(a.vencimento, l.data) - diferencaDiasConciliacao_(b.vencimento, l.data));
       linha.status = 'pendente_encontrado'; linha.matchTipo = 'pagar'; linha.matchId = pendentes[0].id; linha.matchDescricao = pendentes[0].descricao;
+      return linha;
     }
   }
+  linha.possivelDuplicata = possivelDuplicataConciliacao_(l, valorAbs);
   return linha;
 }
 
@@ -363,8 +392,15 @@ function renderFormCadastroConciliacao_(linha, idx){
     ? `<option value="receber">A receber</option>`
     : `<option value="pagar">A pagar (conta)</option><option value="compra">Compra</option>`;
   const opcoesClientes = clientesAtivos().map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+  const d = linha.possivelDuplicata;
+  const avisoDuplicata = d
+    ? `<div style="background:#fff3cd; border:1px solid #ffe29a; color:#7a5b00; border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:13px;">
+        ⚠ Já existe <b>${esc(d.descricao)}</b> (${esc(d.tipo)}${d.data ? ', ' + esc(d.data) : ''}, ${d.status === 'pago' ? 'já pago/recebido' : 'pendente'}) com o mesmo valor no painel. Confira se não é a mesma transação antes de cadastrar — senão o valor conta duas vezes no saldo.
+      </div>`
+    : '';
   return `
     <div class="form-card" style="margin:10px 0 0; box-shadow:none; border:1px dashed var(--line);">
+      ${avisoDuplicata}
       <div class="form-grid">
         <div class="field"><label>Destino</label><select id="concDestino_${idx}" onchange="conciliacaoAtualizarCamposDestino(${idx})">${opcoesDestino}</select></div>
         <div class="field"><label>Descrição</label><input id="concDescricao_${idx}" value="${esc(linha.descricaoBanco)}"></div>

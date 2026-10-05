@@ -353,6 +353,9 @@
     padding:10px 12px;
     font-size:12.5px;
   }
+  table.data thead th.sortable{ cursor:pointer; user-select:none; white-space:nowrap; }
+  table.data thead th.sortable:hover{ filter:brightness(1.25); }
+  table.data thead th.sortable .sort-ind{ display:inline-block; min-width:11px; margin-left:3px; font-size:10px; }
   table.data tbody td{
     border-bottom:1px solid var(--line);
     padding:9px 12px;
@@ -1266,7 +1269,7 @@ Obrigado pela preferência!</textarea></div>
     </div>
 
     <table class="data">
-      <thead><tr><th>Descrição</th><th>Categoria</th><th>Cliente</th><th>Vencimento</th><th>Data efetiva</th><th>Valor</th><th>Status</th><th>Anexos</th><th></th></tr></thead>
+      <thead><tr><th class="sortable" onclick="ordenarFinanceiroPor('descricao')">Descrição<span class="sort-ind" id="sortIndFin-descricao"></span></th><th class="sortable" onclick="ordenarFinanceiroPor('categoria')">Categoria<span class="sort-ind" id="sortIndFin-categoria"></span></th><th class="sortable" onclick="ordenarFinanceiroPor('cliente')">Cliente<span class="sort-ind" id="sortIndFin-cliente"></span></th><th class="sortable" onclick="ordenarFinanceiroPor('vencimento')">Vencimento<span class="sort-ind" id="sortIndFin-vencimento"></span></th><th class="sortable" onclick="ordenarFinanceiroPor('dataEfetiva')">Data efetiva<span class="sort-ind" id="sortIndFin-dataEfetiva"></span></th><th class="sortable" onclick="ordenarFinanceiroPor('valor')">Valor<span class="sort-ind" id="sortIndFin-valor"></span></th><th class="sortable" onclick="ordenarFinanceiroPor('status')">Status<span class="sort-ind" id="sortIndFin-status"></span></th><th>Anexos</th><th></th></tr></thead>
       <tbody id="corpoTabelaFinanceiro"></tbody>
     </table>
     </div>

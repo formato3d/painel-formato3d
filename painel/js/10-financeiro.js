@@ -465,10 +465,45 @@ function preencherFiltroMesFin(){
   sel.innerHTML = '<option value="">Todos os meses</option>' + chaves.map(c => `<option value="${c}">${rotuloMesFinanceiro(c)}</option>`).join('');
   if(chaves.includes(atual)) sel.value = atual;
 }
+// Ordenação da tabela de A pagar/A receber: clicar num cabeçalho ordena por aquela coluna
+// (crescente); clicar de novo na mesma coluna inverte pra decrescente. Fica só na memória
+// (não é salvo), reseta ao recarregar a página.
+let financeiroOrdenacao = { campo: null, dir: 1 };
+function ordenarFinanceiroPor(campo){
+  if(financeiroOrdenacao.campo === campo){
+    financeiroOrdenacao.dir *= -1;
+  } else {
+    financeiroOrdenacao.campo = campo;
+    financeiroOrdenacao.dir = 1;
+  }
+  renderFinanceiro();
+}
+// Valor comparável de cada linha pra uma coluna de ordenação — null significa "sem valor"
+// (ex: Data efetiva de uma conta ainda pendente), que sempre vai pro final da lista,
+// nas duas direções, em vez de virar bagunça misturado com data mais antiga/mais nova.
+function valorOrdenacaoFinanceiro_(f, campo){
+  switch(campo){
+    case 'descricao': return (f.descricao || '').toLowerCase();
+    case 'categoria': return (f.categoria || '').toLowerCase();
+    case 'cliente': return nomeClienteOpcional(f.clienteId).toLowerCase();
+    case 'vencimento': return paraDataObj(f.vencimento);
+    case 'dataEfetiva': return (f.status === 'pago' && f.dataPagamento) ? paraDataObj(f.dataPagamento) : null;
+    case 'valor': return f.valor || 0;
+    case 'status': return f.status === 'pago' ? 1 : 0;
+    default: return null;
+  }
+}
+function atualizarIndicadoresOrdenacaoFinanceiro_(){
+  ['descricao','categoria','cliente','vencimento','dataEfetiva','valor','status'].forEach(campo => {
+    const el = document.getElementById('sortIndFin-' + campo);
+    if(!el) return;
+    el.textContent = financeiroOrdenacao.campo === campo ? (financeiroOrdenacao.dir === 1 ? '▲' : '▼') : '';
+  });
+}
 // Lista que respeita os filtros atuais da tela: a sub-aba ativa (pagar/receber), o mês, o
 // status, a busca por descrição/categoria, o cliente e a faixa de vencimento escolhidos.
 // Usada tanto pra desenhar a tabela quanto pra exportar — a planilha exportada é sempre
-// exatamente o que está na tela.
+// exatamente o que está na tela (já ordenada do jeito que a pessoa escolheu).
 function financeiroFiltradoAtual(){
   const mesAno = document.getElementById('filtroMesFin').value;
   const filtroStatus = document.getElementById('filtroStatusFin').value;
@@ -493,10 +528,22 @@ function financeiroFiltradoAtual(){
       if(vencDe && d < vencDe) return false;
       if(vencAte && d > vencAte) return false;
       return true;
+    })
+    .sort((a,b) => {
+      if(!financeiroOrdenacao.campo) return 0;
+      const va = valorOrdenacaoFinanceiro_(a, financeiroOrdenacao.campo);
+      const vb = valorOrdenacaoFinanceiro_(b, financeiroOrdenacao.campo);
+      if(va === null && vb === null) return 0;
+      if(va === null) return 1;
+      if(vb === null) return -1;
+      if(va < vb) return -1 * financeiroOrdenacao.dir;
+      if(va > vb) return 1 * financeiroOrdenacao.dir;
+      return 0;
     });
 }
 function renderFinanceiro(){
   preencherFiltroMesFin();
+  atualizarIndicadoresOrdenacaoFinanceiro_();
   const tbody = document.getElementById('corpoTabelaFinanceiro');
   tbody.innerHTML = '';
   const lista = financeiroFiltradoAtual();

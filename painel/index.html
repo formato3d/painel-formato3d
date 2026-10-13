@@ -1232,11 +1232,12 @@ Obrigado pela preferência!</textarea></div>
         <div class="field"><label>Categoria</label><input id="ffCategoria" placeholder="Fornecedor, aluguel, venda..."></div>
         <div class="field"><label>Cliente vinculado (opcional)</label><select id="ffCliente"><option value="">—</option></select></div>
         <div class="field"><label>Status</label>
-          <select id="ffStatus">
+          <select id="ffStatus" onchange="atualizarCampoDataPagamento()">
             <option value="pendente">Pendente</option>
             <option value="pago">Pago/Recebido</option>
           </select>
         </div>
+        <div class="field"><label>Data efetiva (pagamento)</label><input id="ffDataPagamento" placeholder="dd/mm/aaaa"></div>
       </div>
       <div class="form-grid wide">
         <div class="field">

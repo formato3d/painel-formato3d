@@ -152,6 +152,9 @@ function abrirFormFinanceiro(id){
   document.getElementById('ffCategoria').value = f.categoria || '';
   document.getElementById('ffCliente').value = f.clienteId || '';
   document.getElementById('ffStatus').value = f.status || 'pendente';
+  // Se já tem data de pagamento registrada, mostra ela. Se já tá pago mas essa data nunca
+  // foi preenchida (lançamentos antigos), sugere hoje — a pessoa ainda pode trocar antes de salvar.
+  document.getElementById('ffDataPagamento').value = f.dataPagamento ? fmtDataExibir(f.dataPagamento) : (f.status === 'pago' ? hojeStr() : '');
   document.getElementById('ffAnexoBoleto').value = '';
   document.getElementById('ffAnexoComprovante').value = '';
   ffAnexos.boleto = f.boletoUrl ? { url: f.boletoUrl, nome: f.boletoNome || 'boleto' } : null;
@@ -208,6 +211,16 @@ function fecharFormFinanceiro(){
   document.getElementById('formFinanceiroWrap').classList.add('hidden');
   financeiroEditId = null;
 }
+// Preenche a Data efetiva com hoje quando o Status muda pra Pago/Recebido na tela, só por
+// conveniência — a pessoa ainda pode trocar a data antes de salvar. Não mexe se a pessoa
+// já tinha preenchido alguma data ali.
+function atualizarCampoDataPagamento(){
+  const status = document.getElementById('ffStatus').value;
+  const campo = document.getElementById('ffDataPagamento');
+  if(status === 'pago' && !campo.value.trim()){
+    campo.value = hojeStr();
+  }
+}
 function salvarFinanceiro(){
   const descricao = document.getElementById('ffDescricao').value.trim();
   if(!descricao){ alert('Informe a descrição.'); return; }
@@ -219,6 +232,12 @@ function salvarFinanceiro(){
     categoria: document.getElementById('ffCategoria').value.trim(),
     clienteId: document.getElementById('ffCliente').value || null,
     status: document.getElementById('ffStatus').value,
+    // Data efetiva (data que realmente foi pago/recebido) — só faz sentido quando o
+    // status é Pago/Recebido; se a pessoa não informar, assume hoje. Voltando pra
+    // Pendente, limpa (fica igual ao que já acontece no botão de desfazer pagamento).
+    dataPagamento: document.getElementById('ffStatus').value === 'pago'
+      ? (document.getElementById('ffDataPagamento').value.trim() || hojeStr())
+      : '',
     boletoUrl: ffAnexos.boleto ? ffAnexos.boleto.url : '',
     boletoNome: ffAnexos.boleto ? ffAnexos.boleto.nome : '',
     comprovanteUrl: ffAnexos.comprovante ? ffAnexos.comprovante.url : '',

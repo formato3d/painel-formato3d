@@ -89,6 +89,65 @@ function orcamentoVinculado(f){
 }
 
 /* =========================================================
+   PARCELAS INTERNAS — helpers de leitura
+   Diferente do "parcelamento automático" abaixo (que cria vários LANÇAMENTOS
+   separados), isso é UM lançamento só que guarda, dentro de si (f.parcelas), o jeito
+   como o valor total vai ser recebido/pago em partes — ex.: 50% no fechamento + 50%
+   na entrega. Cada parte tem seu próprio valor, vencimento, status e comprovante,
+   mas continua aparecendo como UMA linha na tabela (com o detalhamento embaixo).
+   Lançamentos antigos (sem f.parcelas) continuam funcionando exatamente como sempre
+   — todas essas funções caem de volta no comportamento de hoje quando não há parcelas.
+   ========================================================= */
+function temParcelas(f){ return !!(f && f.parcelas && f.parcelas.length); }
+function parcelasPagas(f){ return temParcelas(f) ? f.parcelas.filter(p => p.status === 'pago') : []; }
+function parcelasPendentes(f){ return temParcelas(f) ? f.parcelas.filter(p => p.status !== 'pago') : []; }
+// Valor total do lançamento: soma das parcelas quando tem, senão o campo valor de sempre.
+function valorTotalEntry(f){
+  return temParcelas(f) ? f.parcelas.reduce((s,p) => s + (p.valor || 0), 0) : (f.valor || 0);
+}
+// Quanto já entrou/saiu de verdade (parcelas já pagas, ou o valor inteiro se o
+// lançamento simples já está pago) — é o que conta pros cards de Saídas/Recebido/Saldo.
+function valorEfetivadoEntry(f){
+  if(temParcelas(f)) return parcelasPagas(f).reduce((s,p) => s + (p.valor || 0), 0);
+  return f.status === 'pago' ? (f.valor || 0) : 0;
+}
+// Quanto ainda falta receber/pagar desse lançamento.
+function valorPendenteEntry(f){
+  return Math.max(0, valorTotalEntry(f) - valorEfetivadoEntry(f));
+}
+// 'pendente' (nenhuma parcela paga) / 'parcial' (algumas) / 'pago' (todas) — pra
+// lançamentos sem parcelas, continua sendo só o f.status de sempre (pendente/pago).
+function statusResumoEntry(f){
+  if(!temParcelas(f)) return f.status === 'pago' ? 'pago' : 'pendente';
+  const pagasN = parcelasPagas(f).length, total = f.parcelas.length;
+  if(pagasN === 0) return 'pendente';
+  if(pagasN === total) return 'pago';
+  return 'parcial';
+}
+// Vencimento "que importa agora" pra ordenar/filtrar/avisar: a data da próxima parcela
+// ainda pendente (a mais próxima) — ou, se já estiver tudo pago, a última data só de
+// referência. Lançamento sem parcelas usa o campo vencimento de sempre.
+function vencimentoEfetivoEntry(f){
+  if(!temParcelas(f)) return f.vencimento;
+  const pendentes = parcelasPendentes(f).filter(p => p.vencimento);
+  const lista = pendentes.length ? pendentes : f.parcelas.filter(p => p.vencimento);
+  if(!lista.length) return f.vencimento || '';
+  const comparador = pendentes.length
+    ? (a,b) => paraDataObj(a.vencimento) - paraDataObj(b.vencimento) // próxima pendente: a mais próxima primeiro
+    : (a,b) => paraDataObj(b.vencimento) - paraDataObj(a.vencimento); // tudo pago: a última, só de referência
+  return lista.slice().sort(comparador)[0].vencimento;
+}
+// Data efetiva "resumo": só existe uma data única quando o lançamento está 100% pago
+// (a data da última parcela paga, ou a dataPagamento de sempre se não tem parcelas).
+// Um lançamento "parcial" não tem uma única data efetiva — ver statusBadge na tabela.
+function dataPagamentoEfetivaEntry(f){
+  if(!temParcelas(f)) return (f.status === 'pago' && f.dataPagamento) ? f.dataPagamento : '';
+  const pagas = parcelasPagas(f).filter(p => p.dataPagamento);
+  if(!pagas.length) return '';
+  return pagas.slice().sort((a,b) => paraDataObj(b.dataPagamento) - paraDataObj(a.dataPagamento))[0].dataPagamento;
+}
+
+/* =========================================================
    PARCELAMENTO AUTOMÁTICO
    Uma compra/venda parcelada é cadastrada uma única vez no formulário —
    o painel cria sozinho um lançamento pendente pra cada parcela, já com
@@ -141,6 +200,196 @@ function atualizarPreviewParcelas(){
   const ultimaDataFmt = calcularVencimentoParcela(vencimentoBase, n - 1, intervalo);
   previewEl.textContent = n + 'x de R$ ' + fmtMoeda(valores[0]) + (valores[0] !== valores[n-1] ? ' (algumas de R$ ' + fmtMoeda(valores[n-1]) + ')' : '') + ' — de ' + primeiraDataFmt + ' até ' + ultimaDataFmt;
 }
+
+/* =========================================================
+   PARCELAS INTERNAS — edição no formulário
+   O detalhamento (valor/vencimento/status/comprovante de cada parte) fica em
+   ffParcelasEdit enquanto o formulário está aberto; só vira state.financeiro de
+   verdade quando a pessoa clica em Salvar (igual ao resto do formulário). Dá pra
+   ligar/desligar e editar tanto numa conta nova quanto numa já existente.
+   ========================================================= */
+let ffParcelasEdit = [];
+function parcelaEditVazia(){
+  return { id: uid('parcela'), valor: 0, vencimento: '', status: 'pendente', dataPagamento: '', comprovanteUrl: '', comprovanteNome: '' };
+}
+// Mostra/trava os campos principais (Valor, Vencimento, Status, Data efetiva, anexo de
+// comprovante da conta) conforme a conta está vinculada a um orçamento e/ou usando
+// parcelas internas — chamada sempre que um desses dois fatores muda.
+function atualizarEstadoCamposPrincipaisFF(){
+  const o = financeiroEditId ? orcamentoVinculado(state.financeiro.find(x => x.id === financeiroEditId)) : null;
+  const usaParcelas = document.getElementById('ffUsarParcelas').checked;
+  const valorTravado = !!o || usaParcelas;
+  document.getElementById('ffValor').readOnly = valorTravado;
+  document.getElementById('ffValor').classList.toggle('campo-travado', valorTravado);
+  document.getElementById('ffCliente').disabled = !!o;
+  document.getElementById('ffCliente').classList.toggle('campo-travado', !!o);
+  // Vencimento, Status e Data efetiva "da conta inteira" só fazem sentido pra um
+  // pagamento único — com parcelas internas, cada parte tem os seus.
+  document.getElementById('ffVencimentoCampo').classList.toggle('hidden', usaParcelas);
+  document.getElementById('ffStatusDataCampos').classList.toggle('hidden', usaParcelas);
+  document.getElementById('ffAnexoComprovanteCampo').classList.toggle('hidden', usaParcelas);
+  document.getElementById('ffParcelasResumoStatus').classList.toggle('hidden', !usaParcelas);
+}
+// Liga/desliga o uso de parcelas internas nesta conta.
+function alternarUsoParcelas(){
+  const ligado = document.getElementById('ffUsarParcelas').checked;
+  if(ligado && ffParcelasEdit.length === 0){
+    // Semeia com 2 parcelas de 50/50 a partir do que já foi digitado em Valor/Vencimento,
+    // pro caso mais comum (ex.: sinal + entrega) — a pessoa ajusta valores/datas depois.
+    const total = parseMoeda(document.getElementById('ffValor').value);
+    const vencBase = document.getElementById('ffVencimento').value.trim();
+    const valores = dividirValorEmParcelas(total, 2);
+    ffParcelasEdit = [
+      Object.assign(parcelaEditVazia(), { valor: valores[0], vencimento: vencBase && paraDataObj(vencBase) ? vencBase : hojeStr() }),
+      Object.assign(parcelaEditVazia(), { valor: valores[1], vencimento: '' })
+    ];
+  } else if(!ligado && ffParcelasEdit.length > 0){
+    const temAlgumaCoisa = ffParcelasEdit.some(p => p.valor || p.vencimento);
+    if(temAlgumaCoisa && !confirm('Desligar vai descartar as parcelas preenchidas aqui (só muda de verdade se você clicar em Salvar depois).\n\nContinuar?')){
+      document.getElementById('ffUsarParcelas').checked = true;
+      return;
+    }
+    ffParcelasEdit = [];
+  }
+  document.getElementById('ffParcelasInternasCampos').classList.toggle('hidden', !ligado);
+  atualizarEstadoCamposPrincipaisFF();
+  renderFfParcelasLista();
+}
+function adicionarParcelaEdit(){
+  ffParcelasEdit.push(parcelaEditVazia());
+  renderFfParcelasLista();
+}
+function removerParcelaEdit(i){
+  const p = ffParcelasEdit[i];
+  if((p.valor || p.vencimento) && !confirm('Remover esta parcela do detalhamento?')) return;
+  ffParcelasEdit.splice(i, 1);
+  renderFfParcelasLista();
+}
+function atualizarParcelaCampo(i, campo, valor){
+  if(!ffParcelasEdit[i]) return;
+  ffParcelasEdit[i][campo] = campo === 'valor' ? parseMoeda(valor) : valor.trim();
+  atualizarPreviewParcelasInternas();
+}
+function alternarStatusParcelaEdit(i){
+  if(!ffParcelasEdit[i]) return;
+  const status = document.getElementById('ffParcStatus_' + i).value;
+  ffParcelasEdit[i].status = status;
+  if(status === 'pago' && !ffParcelasEdit[i].dataPagamento){
+    ffParcelasEdit[i].dataPagamento = hojeStr();
+  }
+  renderFfParcelasLista();
+}
+function removerAnexoParcelaEdit(i){
+  ffParcelasEdit[i].comprovanteUrl = '';
+  ffParcelasEdit[i].comprovanteNome = '';
+  renderFfParcelasLista();
+}
+// Envia o comprovante de UMA parcela (mesmo endpoint/limites do anexo da conta inteira).
+function processarAnexoParcela(input, i){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(!/^(application\/pdf|image\/(png|jpeg|webp))$/.test(file.type)){
+    alert('Envie um arquivo em PDF, JPG, PNG ou WEBP.');
+    input.value = '';
+    return;
+  }
+  if(file.size > 8 * 1024 * 1024){
+    alert('O arquivo deve ter até 8MB.');
+    input.value = '';
+    return;
+  }
+  const txtEl = document.querySelector('#ffParcAnexoUpload_' + i + ' .ph-txt');
+  const txtOriginal = txtEl ? txtEl.innerHTML : '';
+  if(txtEl) txtEl.innerHTML = '<b>Enviando...</b>';
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const base64 = String(e.target.result).split(',')[1] || '';
+    fetch(CONFIG.URL_API, {
+      method: 'POST',
+      body: JSON.stringify({
+        token: CONFIG.TOKEN,
+        sessao: sessaoAtual(),
+        action: 'uploadAnexoFinanceiro',
+        nomeArquivo: file.name,
+        mimeType: file.type,
+        conteudoBase64: base64
+      })
+    })
+      .then(r => r.json())
+      .then(resp => {
+        if(sessaoInvalida(resp.erro)){ voltarParaLogin('Sua sessão expirou — faça login novamente.'); return; }
+        if(resp.erro){ alert('Não foi possível enviar o arquivo: ' + resp.erro); input.value = ''; if(txtEl) txtEl.innerHTML = txtOriginal; return; }
+        ffParcelasEdit[i].comprovanteUrl = resp.url;
+        ffParcelasEdit[i].comprovanteNome = resp.nome || file.name;
+        renderFfParcelasLista();
+      })
+      .catch(err => {
+        if(txtEl) txtEl.innerHTML = txtOriginal;
+        alert('Não foi possível enviar o arquivo agora — verifique sua internet.');
+        input.value = '';
+        console.error(err);
+      });
+  };
+  reader.readAsDataURL(file);
+}
+// Soma das parcelas digitadas — vira o Valor (R$) mostrado (travado) lá em cima, e,
+// se a conta estiver vinculada a um orçamento, compara com o total dele pra avisar
+// se ainda não bate (o salvar bloqueia nesse caso — ver salvarFinanceiro).
+function atualizarPreviewParcelasInternas(){
+  const total = ffParcelasEdit.reduce((s,p) => s + (p.valor || 0), 0);
+  document.getElementById('ffValor').value = fmtMoeda(total);
+  const previewEl = document.getElementById('ffParcelasTotalPreview');
+  if(!previewEl) return;
+  const f = financeiroEditId ? state.financeiro.find(x => x.id === financeiroEditId) : null;
+  const o = orcamentoVinculado(f);
+  const pagasN = ffParcelasEdit.filter(p => p.status === 'pago').length;
+  let texto = 'Total das parcelas: R$ ' + fmtMoeda(total) + ' (' + pagasN + ' de ' + ffParcelasEdit.length + ' já paga' + (ffParcelasEdit.length === 1 ? '' : 's') + ')';
+  if(o && Math.round(total * 100) !== Math.round(o.total * 100)){
+    texto += ' ⚠ não bate com o total do orçamento nº ' + o.numero + ' (R$ ' + fmtMoeda(o.total) + ') — ajuste antes de salvar.';
+  }
+  previewEl.textContent = texto;
+  const resumoEl = document.getElementById('ffParcelasResumoTexto');
+  if(resumoEl){
+    resumoEl.textContent = pagasN === 0 ? 'Pendente' : (pagasN === ffParcelasEdit.length ? 'Pago' : 'Parcial');
+  }
+}
+function renderFfParcelasLista(){
+  const cont = document.getElementById('ffParcelasLista');
+  cont.innerHTML = ffParcelasEdit.map((p, i) => `
+    <div class="ff-parcela-linha">
+      <div class="ff-parcela-linha-topo">
+        <span class="ff-parcela-num">Parcela ${i+1}</span>
+        <div class="field"><label>Valor (R$)</label><input id="ffParcValor_${i}" value="${fmtMoeda(p.valor)}" oninput="atualizarParcelaCampo(${i},'valor',this.value)"></div>
+        <div class="field"><label>Vencimento</label><input id="ffParcVenc_${i}" placeholder="dd/mm/aaaa" value="${esc(p.vencimento)}" oninput="atualizarParcelaCampo(${i},'vencimento',this.value)"></div>
+        <div class="field"><label>Status</label>
+          <select id="ffParcStatus_${i}" onchange="alternarStatusParcelaEdit(${i})">
+            <option value="pendente" ${p.status !== 'pago' ? 'selected' : ''}>Pendente</option>
+            <option value="pago" ${p.status === 'pago' ? 'selected' : ''}>Pago/Recebido</option>
+          </select>
+        </div>
+        <button type="button" class="btn-icon danger" onclick="removerParcelaEdit(${i})" title="Remover parcela">✕</button>
+      </div>
+      ${p.status === 'pago' ? `
+      <div class="ff-parcela-linha-baixo">
+        <div class="field"><label>Data do pagamento</label><input id="ffParcData_${i}" placeholder="dd/mm/aaaa" value="${esc(p.dataPagamento)}" oninput="atualizarParcelaCampo(${i},'dataPagamento',this.value)"></div>
+        <div class="field">
+          <label>Comprovante desta parcela</label>
+          ${p.comprovanteUrl ? `
+            <div class="file-preview">
+              <a href="${esc(p.comprovanteUrl)}" target="_blank" rel="noopener">🧾 ${esc(p.comprovanteNome || 'comprovante')}</a>
+              <button type="button" onclick="removerAnexoParcelaEdit(${i})">Remover</button>
+            </div>` : `
+            <div class="file-upload" id="ffParcAnexoUpload_${i}">
+              <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onchange="processarAnexoParcela(this,${i})">
+              <div class="ph-txt"><b>Anexar comprovante</b><br>PDF, JPG, PNG ou WEBP até 8MB</div>
+            </div>`}
+        </div>
+      </div>` : ''}
+    </div>
+  `).join('') || '<p class="ff-parcela-vazio">Nenhuma parcela ainda — clique em "+ Adicionar parcela".</p>';
+  atualizarPreviewParcelasInternas();
+}
+
 function abrirFormFinanceiro(id){
   financeiroEditId = id || null;
   const f = id ? state.financeiro.find(x => x.id === id) : {};
@@ -162,15 +411,20 @@ function abrirFormFinanceiro(id){
   atualizarPreviewAnexo('boleto');
   atualizarPreviewAnexo('comprovante');
 
+  // Parcelas internas (uma conta só, recebida/paga em partes — ver bloco acima). Se o
+  // lançamento já tem (f.parcelas), carrega uma CÓPIA pra editar (cancelar não mexe no
+  // que já estava salvo); senão começa desligado/vazio.
+  ffParcelasEdit = temParcelas(f) ? JSON.parse(JSON.stringify(f.parcelas)) : [];
+  document.getElementById('ffUsarParcelas').checked = ffParcelasEdit.length > 0;
+  document.getElementById('ffParcelasInternasCampos').classList.toggle('hidden', ffParcelasEdit.length === 0);
+  renderFfParcelasLista(); // já atualiza o Valor total e o "Status geral" a partir de ffParcelasEdit
+
   // Cliente e valor de um lançamento vinculado a um orçamento são controlados pelo
   // orçamento (pra nunca ficarem desencontrados) — edite lá se precisar mudar.
   const o = orcamentoVinculado(f);
   const avisoEl = document.getElementById('ffVinculoAviso');
   const linkEl = document.getElementById('ffVinculoLink');
-  document.getElementById('ffCliente').disabled = !!o;
-  document.getElementById('ffValor').readOnly = !!o;
-  document.getElementById('ffValor').classList.toggle('campo-travado', !!o);
-  document.getElementById('ffCliente').classList.toggle('campo-travado', !!o);
+  atualizarEstadoCamposPrincipaisFF();
   if(o){
     linkEl.textContent = 'Orçamento nº ' + o.numero;
     linkEl.onclick = function(ev){
@@ -226,26 +480,66 @@ function salvarFinanceiro(){
   if(!descricao){ alert('Informe a descrição.'); return; }
   const valorInformado = parseMoeda(document.getElementById('ffValor').value);
   const vencimentoInformado = document.getElementById('ffVencimento').value.trim();
+
+  const parcelarAutomatico = !financeiroEditId && document.getElementById('ffParcelado').checked;
+  const usarParcelasInternas = document.getElementById('ffUsarParcelas').checked && ffParcelasEdit.length > 0;
+  if(parcelarAutomatico && usarParcelasInternas){
+    alert('Escolha só uma das duas opções de parcelamento: "Parcelar esta conta automaticamente" (cria várias contas separadas) OU "Receber/pagar em partes" (uma conta só, com o detalhamento dentro). Desligue uma delas antes de salvar.');
+    return;
+  }
+
+  // Parcelas internas: valida cada parte (valor, vencimento, e data de pagamento de
+  // quem já está marcada como paga) antes de calcular o total/status/vencimento
+  // "resumo" que vão pros campos de sempre do lançamento (ver helpers no topo do arquivo).
+  let parcelasFinal = null;
+  if(usarParcelasInternas){
+    for(let i = 0; i < ffParcelasEdit.length; i++){
+      const p = ffParcelasEdit[i];
+      if(!p.valor || p.valor <= 0){ alert('Informe o valor da parcela ' + (i+1) + '.'); return; }
+      if(!paraDataObj(p.vencimento)){ alert('Informe uma data de vencimento válida pra parcela ' + (i+1) + '.'); return; }
+      if(p.status === 'pago' && !paraDataObj(p.dataPagamento)) p.dataPagamento = hojeStr();
+    }
+    const totalParcelas = ffParcelasEdit.reduce((s,p) => s + (p.valor || 0), 0);
+    const oAtual = financeiroEditId ? orcamentoVinculado(state.financeiro.find(x => x.id === financeiroEditId)) : null;
+    if(oAtual && Math.round(totalParcelas * 100) !== Math.round(oAtual.total * 100)){
+      alert('A soma das parcelas (R$ ' + fmtMoeda(totalParcelas) + ') não bate com o total do orçamento nº ' + oAtual.numero + ' (R$ ' + fmtMoeda(oAtual.total) + '). Ajuste antes de salvar.');
+      return;
+    }
+    parcelasFinal = ffParcelasEdit.map((p, i) => Object.assign({}, p, { numero: i + 1 }));
+  }
+
   const dadosBase = {
     tipo: document.getElementById('ffTipo').value,
     descricao,
     categoria: document.getElementById('ffCategoria').value.trim(),
     clienteId: document.getElementById('ffCliente').value || null,
-    status: document.getElementById('ffStatus').value,
-    // Data efetiva (data que realmente foi pago/recebido) — só faz sentido quando o
-    // status é Pago/Recebido; se a pessoa não informar, assume hoje. Voltando pra
-    // Pendente, limpa (fica igual ao que já acontece no botão de desfazer pagamento).
-    dataPagamento: document.getElementById('ffStatus').value === 'pago'
-      ? (document.getElementById('ffDataPagamento').value.trim() || hojeStr())
-      : '',
     boletoUrl: ffAnexos.boleto ? ffAnexos.boleto.url : '',
     boletoNome: ffAnexos.boleto ? ffAnexos.boleto.nome : '',
     comprovanteUrl: ffAnexos.comprovante ? ffAnexos.comprovante.url : '',
     comprovanteNome: ffAnexos.comprovante ? ffAnexos.comprovante.nome : ''
   };
+  if(usarParcelasInternas){
+    const statusCalc = statusResumoEntry({ parcelas: parcelasFinal });
+    // O campo "status" de sempre só entende pendente/pago — "parcial" é calculado na
+    // hora (ver statusResumoEntry) a partir de f.parcelas, não fica salvo aqui.
+    dadosBase.status = statusCalc === 'pago' ? 'pago' : 'pendente';
+    dadosBase.dataPagamento = statusCalc === 'pago' ? (dataPagamentoEfetivaEntry({ parcelas: parcelasFinal }) || '') : '';
+    dadosBase.parcelas = parcelasFinal;
+    dadosBase.valor = parcelasFinal.reduce((s,p) => s + (p.valor || 0), 0);
+    dadosBase.vencimento = vencimentoEfetivoEntry({ parcelas: parcelasFinal }) || '';
+  } else {
+    dadosBase.status = document.getElementById('ffStatus').value;
+    // Data efetiva (data que realmente foi pago/recebido) — só faz sentido quando o
+    // status é Pago/Recebido; se a pessoa não informar, assume hoje. Voltando pra
+    // Pendente, limpa (fica igual ao que já acontece no botão de desfazer pagamento).
+    dadosBase.dataPagamento = dadosBase.status === 'pago' ? (document.getElementById('ffDataPagamento').value.trim() || hojeStr()) : '';
+    dadosBase.parcelas = [];
+    dadosBase.valor = valorInformado;
+    dadosBase.vencimento = vencimentoInformado;
+  }
 
   // Parcelamento automático só é oferecido pra lançamentos novos (ver abrirFormFinanceiro).
-  const parcelar = !financeiroEditId && document.getElementById('ffParcelado').checked;
+  const parcelar = parcelarAutomatico;
   if(parcelar){
     const n = parseInt(document.getElementById('ffParcelas').value, 10);
     if(!n || n < 2){ alert('Informe o número de parcelas (mínimo 2).'); return; }
@@ -269,15 +563,14 @@ function salvarFinanceiro(){
       state.financeiro.push(item);
     }
   } else {
-    const dados = Object.assign({}, dadosBase, {
-      valor: valorInformado,
-      vencimento: vencimentoInformado
-    });
     if(financeiroEditId){
-      Object.assign(state.financeiro.find(x => x.id === financeiroEditId), dados);
+      const alvo = state.financeiro.find(x => x.id === financeiroEditId);
+      Object.assign(alvo, dadosBase);
+      // Trocar pra "sem parcelas" precisa apagar o que tinha antes (dadosBase.parcelas
+      // já vem [] nesse caso) — Object.assign acima já cobre isso.
     } else {
-      dados.id = uid('financeiro');
-      state.financeiro.push(dados);
+      dadosBase.id = uid('financeiro');
+      state.financeiro.push(dadosBase);
     }
   }
   marcarAlterado();
@@ -297,6 +590,9 @@ function excluirFinanceiro(id){
 function alternarStatusFinanceiro(id){
   const f = state.financeiro.find(x => x.id === id);
   if(!f) return;
+  // Contas com parcelas internas não têm um ✓/↺ único — cada parte é marcada
+  // separadamente na linha dela (ver alternarStatusParcela).
+  if(temParcelas(f)) return;
   if(f.status === 'pago'){
     if(f.valorOriginal !== undefined){ f.valor = f.valorOriginal; delete f.valorOriginal; }
     delete f.dataPagamento;
@@ -341,13 +637,20 @@ function concluirOrcamentoVinculado_(f){
    recebido (fica certo no Saldo real desde a hora que é confirmado).
    ========================================================= */
 let confirmarPagamentoId = null;
-function abrirConfirmarPagamento(id){
+// Quando o pagamento é de UMA parcela interna (não da conta inteira), guarda o id dela
+// aqui — ver alternarStatusParcela. null = é a conta inteira (comportamento de sempre).
+let confirmarPagamentoParcelaId = null;
+function abrirConfirmarPagamento(id, parcelaId){
   const f = state.financeiro.find(x => x.id === id);
   if(!f) return;
   confirmarPagamentoId = id;
-  document.getElementById('confirmarPagamentoTitulo').textContent = f.tipo === 'receber' ? 'Confirmar recebimento' : 'Confirmar pagamento';
-  document.getElementById('confirmarPagamentoSub').textContent = (f.descricao || '') + ' — valor da conta: R$ ' + fmtMoeda(f.valor);
-  document.getElementById('cfValor').value = fmtMoeda(f.valor);
+  confirmarPagamentoParcelaId = parcelaId || null;
+  const p = parcelaId ? (f.parcelas || []).find(x => x.id === parcelaId) : null;
+  const alvoValor = p ? p.valor : f.valor;
+  const sufixoTitulo = p ? (' — parcela ' + (f.parcelas.findIndex(x => x.id === p.id) + 1) + '/' + f.parcelas.length) : '';
+  document.getElementById('confirmarPagamentoTitulo').textContent = (f.tipo === 'receber' ? 'Confirmar recebimento' : 'Confirmar pagamento') + sufixoTitulo;
+  document.getElementById('confirmarPagamentoSub').textContent = (f.descricao || '') + ' — valor da ' + (p ? 'parcela' : 'conta') + ': R$ ' + fmtMoeda(alvoValor);
+  document.getElementById('cfValor').value = fmtMoeda(alvoValor);
   document.getElementById('cfData').value = hojeStr();
   document.getElementById('cfFormaPagamento').value = 'Pix';
   document.getElementById('cfDesconto').value = '0,00';
@@ -357,6 +660,7 @@ function abrirConfirmarPagamento(id){
 function fecharConfirmarPagamento(){
   document.getElementById('confirmarPagamentoWrap').classList.add('hidden');
   confirmarPagamentoId = null;
+  confirmarPagamentoParcelaId = null;
 }
 // O desconto da maquininha só faz sentido pra dinheiro que está ENTRANDO (conta a
 // receber) via cartão de crédito — é a taxa que a operadora desconta antes de cair na
@@ -396,6 +700,59 @@ function efetivarPagamentoFinanceiro_(f, { valorLiquido, data, formaPagamento, d
   }
   concluirOrcamentoVinculado_(f);
 }
+// Mesma ideia de efetivarPagamentoFinanceiro_, mas aplicada a UMA parcela interna (p)
+// dentro da conta (f) — e, no final, recalcula o status geral da conta
+// (pendente/parcial/pago) e sincroniza o orçamento vinculado só quando a conta
+// INTEIRA terminar de ser paga (não a cada parcela).
+function efetivarPagamentoParcela_(f, p, { valorLiquido, data, formaPagamento, desconto }){
+  if(p.valorOriginal === undefined) p.valorOriginal = p.valor;
+  p.valor = valorLiquido;
+  p.status = 'pago';
+  p.dataPagamento = data;
+  p.formaPagamentoConfirmada = formaPagamento;
+  p.descontoMaquininha = desconto || 0;
+  sincronizarEntryAposParcela_(f);
+}
+function desfazerPagamentoParcela_(f, p){
+  if(p.valorOriginal !== undefined){ p.valor = p.valorOriginal; delete p.valorOriginal; }
+  delete p.dataPagamento;
+  delete p.formaPagamentoConfirmada;
+  delete p.descontoMaquininha;
+  p.status = 'pendente';
+  sincronizarEntryAposParcela_(f);
+}
+// Depois de pagar/desfazer uma parcela, recalcula os campos "resumo" da conta (status
+// legado só entende pendente/pago — "parcial" é só pra UI, ver statusResumoEntry) e
+// conclui/desfaz o orçamento vinculado igual já acontecia pro pagamento de conta inteira.
+function sincronizarEntryAposParcela_(f){
+  const statusR = statusResumoEntry(f);
+  f.status = statusR === 'pago' ? 'pago' : 'pendente';
+  f.dataPagamento = statusR === 'pago' ? (dataPagamentoEfetivaEntry(f) || '') : '';
+  if(statusR === 'pago'){
+    if(f.orcamentoId){
+      const o = state.orcamentos.find(x => x.id === f.orcamentoId);
+      if(o) f.totalOrcamentoNoPagamento = o.total;
+    }
+    concluirOrcamentoVinculado_(f);
+  } else {
+    desfazerConclusaoOrcamentoVinculado_(f);
+  }
+}
+// Clicar no ✓/↺ de UMA parcela dentro do detalhamento de uma conta (ver renderFinanceiro).
+function alternarStatusParcela(entryId, parcelaId){
+  const f = state.financeiro.find(x => x.id === entryId);
+  if(!f) return;
+  const p = (f.parcelas || []).find(x => x.id === parcelaId);
+  if(!p) return;
+  if(p.status === 'pago'){
+    desfazerPagamentoParcela_(f, p);
+    marcarAlterado();
+    renderFinanceiro();
+    renderOrcamentos();
+    return;
+  }
+  abrirConfirmarPagamento(entryId, parcelaId);
+}
 function confirmarPagamentoSalvar(){
   const f = state.financeiro.find(x => x.id === confirmarPagamentoId);
   if(!f) return;
@@ -408,21 +765,35 @@ function confirmarPagamentoSalvar(){
   const desconto = mostraDesconto ? parseMoeda(document.getElementById('cfDesconto').value) : 0;
   const valorLiquido = Math.max(0, valorInformado - desconto);
 
-  efetivarPagamentoFinanceiro_(f, { valorLiquido, data: dataInformada, formaPagamento, desconto });
+  let statusFinalPago = true;
+  if(confirmarPagamentoParcelaId){
+    const p = (f.parcelas || []).find(x => x.id === confirmarPagamentoParcelaId);
+    if(!p) return;
+    efetivarPagamentoParcela_(f, p, { valorLiquido, data: dataInformada, formaPagamento, desconto });
+    statusFinalPago = statusResumoEntry(f) === 'pago';
+  } else {
+    efetivarPagamentoFinanceiro_(f, { valorLiquido, data: dataInformada, formaPagamento, desconto });
+  }
 
   const ehReceber = f.tipo === 'receber';
   marcarAlterado();
   fecharConfirmarPagamento();
   renderFinanceiro();
   renderOrcamentos();
-  // Pagamento de uma venda (conta a receber) confirmado agora — oferece gerar o recibo na hora.
-  if(ehReceber){
+  // Pagamento de uma venda (conta a receber) confirmado agora — oferece gerar o recibo na
+  // hora. Só oferece quando a conta termina de ser paga (não a cada parcela parcial).
+  if(ehReceber && statusFinalPago){
     if(confirm('Pagamento confirmado!\n\nDeseja gerar o recibo agora?')) abrirRecibo(f.id);
   }
 }
+// Vencido = tem parte pendente com vencimento já passado. Numa conta com parcelas
+// internas, olha a próxima parcela pendente (vencimentoEfetivoEntry); sem parcelas, é
+// o comportamento de sempre.
 function estaVencido(f){
-  if(f.status !== 'pendente' || !f.vencimento) return false;
-  const d = paraDataObj(f.vencimento);
+  if(statusResumoEntry(f) === 'pago') return false;
+  const venc = vencimentoEfetivoEntry(f);
+  if(!venc) return false;
+  const d = paraDataObj(venc);
   if(!d) return false;
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   return d < hoje;
@@ -460,7 +831,7 @@ function mostrarAbaFinanceiro(tipo){
 }
 // "YYYY-MM" a partir do vencimento de um lançamento — chave usada pelo filtro de mês.
 function chaveMesFinanceiro(f){
-  const d = paraDataObj(f.vencimento);
+  const d = paraDataObj(vencimentoEfetivoEntry(f));
   return d ? (d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')) : null;
 }
 // Todo mês/ano que aparece em algum vencimento do financeiro (pagar + receber), pra popular
@@ -505,10 +876,10 @@ function valorOrdenacaoFinanceiro_(f, campo){
     case 'descricao': return (f.descricao || '').toLowerCase();
     case 'categoria': return (f.categoria || '').toLowerCase();
     case 'cliente': return nomeClienteOpcional(f.clienteId).toLowerCase();
-    case 'vencimento': return paraDataObj(f.vencimento);
-    case 'dataEfetiva': return (f.status === 'pago' && f.dataPagamento) ? paraDataObj(f.dataPagamento) : null;
-    case 'valor': return f.valor || 0;
-    case 'status': return f.status === 'pago' ? 1 : 0;
+    case 'vencimento': return paraDataObj(vencimentoEfetivoEntry(f));
+    case 'dataEfetiva': { const dt = dataPagamentoEfetivaEntry(f); return dt ? paraDataObj(dt) : null; }
+    case 'valor': return valorTotalEntry(f);
+    case 'status': return statusResumoEntry(f) === 'pago' ? 1 : (statusResumoEntry(f) === 'parcial' ? 0.5 : 0);
     default: return null;
   }
 }
@@ -536,13 +907,13 @@ function financeiroFiltradoAtual(){
   const vencAte = elVencAte ? paraDataObj(elVencAte.value.trim()) : null;
   return financeiroAtivos()
     .filter(f => f.tipo === abaFinanceiroAtiva)
-    .filter(f => !filtroStatus || f.status === filtroStatus)
+    .filter(f => !filtroStatus || statusResumoEntry(f) === filtroStatus)
     .filter(f => !mesAno || chaveMesFinanceiro(f) === mesAno)
     .filter(f => !busca || (f.descricao||'').toLowerCase().includes(busca) || (f.categoria||'').toLowerCase().includes(busca))
     .filter(f => !clienteId || f.clienteId === clienteId)
     .filter(f => {
       if(!vencDe && !vencAte) return true;
-      const d = paraDataObj(f.vencimento);
+      const d = paraDataObj(vencimentoEfetivoEntry(f));
       if(!d) return false;
       if(vencDe && d < vencDe) return false;
       if(vencAte && d > vencAte) return false;
@@ -572,13 +943,17 @@ function renderFinanceiro(){
   lista.forEach(f => {
     const tr = document.createElement('tr');
     tr.id = 'financeiro-linha-' + f.id;
+    const comParcelas = temParcelas(f);
+    const statusR = statusResumoEntry(f);
     const vencido = estaVencido(f);
-    const detalhePagamento = f.status === 'pago' && (f.dataPagamento || f.formaPagamentoConfirmada)
+    const detalhePagamento = statusR === 'pago' && !comParcelas && (f.dataPagamento || f.formaPagamentoConfirmada)
       ? [f.dataPagamento ? ('em ' + fmtDataExibir(f.dataPagamento)) : '', f.formaPagamentoConfirmada || '', f.descontoMaquininha ? ('desconto de R$ ' + fmtMoeda(f.descontoMaquininha) + ' na maquininha') : ''].filter(Boolean).join(' · ')
       : '';
-    const statusBadge = f.status === 'pago'
+    const statusBadge = statusR === 'pago'
       ? `<span class="badge pago"${detalhePagamento ? ` title="${esc(detalhePagamento)}"` : ''}>Pago/Recebido</span>`
-      : (vencido ? '<span class="badge vencido">Vencido</span>' : '<span class="badge pendente">Pendente</span>');
+      : statusR === 'parcial'
+        ? `<span class="badge parcial" title="${esc(parcelasPagas(f).length + ' de ' + f.parcelas.length + ' parcelas pagas — falta R$ ' + fmtMoeda(valorPendenteEntry(f)))}">Parcial</span>`
+        : (vencido ? '<span class="badge vencido">Vencido</span>' : '<span class="badge pendente">Pendente</span>');
     const dessincronizado = financeiroDessincronizado(f);
     const avisoDessinc = dessincronizado
       ? ' <span class="badge desencontrado" title="O orçamento vinculado mudou depois desse pagamento já confirmado (valor ou cliente diferente do que foi cobrado) — confira e ajuste manualmente.">⚠ orçamento mudou</span>'
@@ -587,29 +962,63 @@ function renderFinanceiro(){
     const parcelaBadge = f.parcelaTotal
       ? ` <span class="badge parcela" title="Parcela ${f.parcelaNum} de ${f.parcelaTotal} desta compra/venda">${f.parcelaNum}/${f.parcelaTotal}</span>`
       : '';
+    const parcelasBadge = comParcelas
+      ? ` <span class="badge parcelas-internas" title="Essa conta é recebida/paga em ${f.parcelas.length} partes — veja o detalhamento abaixo">${f.parcelas.length}x</span>`
+      : '';
     // Data em que a transação foi efetivamente concluída — diferente do Vencimento (a data
-    // combinada/prevista lá no orçamento). Só existe depois que o pagamento é confirmado
-    // (ver efetivarPagamentoFinanceiro_); antes disso, mostra "—".
-    const dataPagamentoTxt = f.status === 'pago' && f.dataPagamento ? fmtDataExibir(f.dataPagamento) : '—';
+    // combinada/prevista lá no orçamento). Numa conta com parcelas, só existe uma data única
+    // quando TODAS as partes já foram pagas; "parcial" mostra quantas já foram.
+    const dataPagamentoTxt = comParcelas
+      ? (statusR === 'pago' ? fmtDataExibir(dataPagamentoEfetivaEntry(f)) : (statusR === 'parcial' ? (parcelasPagas(f).length + '/' + f.parcelas.length + ' pagas') : '—'))
+      : (statusR === 'pago' && f.dataPagamento ? fmtDataExibir(f.dataPagamento) : '—');
     tr.innerHTML = `
-      <td data-label="Descrição">${esc(f.descricao)}${parcelaBadge}</td>
+      <td data-label="Descrição">${esc(f.descricao)}${parcelaBadge}${parcelasBadge}</td>
       <td data-label="Categoria">${esc(f.categoria)}</td>
       <td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td>
-      <td data-label="Vencimento">${fmtDataExibir(f.vencimento)}</td>
+      <td data-label="Vencimento">${fmtDataExibir(vencimentoEfetivoEntry(f))}</td>
       <td data-label="Data efetiva">${dataPagamentoTxt}</td>
-      <td data-label="Valor">R$ ${fmtMoeda(f.valor)}</td>
+      <td data-label="Valor">R$ ${fmtMoeda(valorTotalEntry(f))}</td>
       <td data-label="Status">${statusBadge}${avisoDessinc}</td>
       <td class="anexos-cell" data-label="Anexos">${anexos || '—'}</td>
       <td class="acoes">
-        <button class="btn-icon" onclick="alternarStatusFinanceiro('${f.id}')" title="Marcar como ${f.status === 'pendente' ? 'pago/recebido' : 'pendente'}">${f.status === 'pendente' ? '✓' : '↺'}</button>
+        ${comParcelas ? '' : `<button class="btn-icon" onclick="alternarStatusFinanceiro('${f.id}')" title="Marcar como ${f.status === 'pendente' ? 'pago/recebido' : 'pendente'}">${f.status === 'pendente' ? '✓' : '↺'}</button>`}
         ${dessincronizado ? `<button class="btn-icon" onclick="atualizarFinanceiroComOrcamento('${f.id}')" title="Atualizar lançamento com os dados atuais do orçamento">🔄</button>` : ''}
-        ${(f.tipo === 'receber' && f.status === 'pago') ? `<button class="btn-icon" onclick="abrirRecibo('${f.id}')" title="Gerar/imprimir recibo">🧾</button>` : ''}
+        ${(f.tipo === 'receber' && statusR === 'pago') ? `<button class="btn-icon" onclick="abrirRecibo('${f.id}')" title="Gerar/imprimir recibo">🧾</button>` : ''}
         <button class="btn-icon" onclick="abrirFormFinanceiro('${f.id}')" title="Editar">✎</button>
         <button class="btn-icon danger" onclick="excluirFinanceiro('${f.id}')" title="Excluir">✕</button>
       </td>`;
     tbody.appendChild(tr);
+    if(comParcelas){
+      f.parcelas.forEach((p, idx) => tbody.appendChild(linhaParcelaFinanceiro_(f, p, idx)));
+    }
   });
   renderCardsFinanceiro();
+}
+// Uma linha de detalhamento (sub-linha) embaixo da conta, pra cada parcela interna —
+// mesmas colunas da linha principal, só que com os dados daquela parte específica.
+function linhaParcelaFinanceiro_(f, p, idx){
+  const tr = document.createElement('tr');
+  tr.className = 'financeiro-linha-parcela';
+  const pago = p.status === 'pago';
+  const parcelaVencida = !pago && (() => { const d = paraDataObj(p.vencimento); if(!d) return false; const hoje = new Date(); hoje.setHours(0,0,0,0); return d < hoje; })();
+  const statusBadge = pago ? '<span class="badge pago">Pago/Recebido</span>' : (parcelaVencida ? '<span class="badge vencido">Vencido</span>' : '<span class="badge pendente">Pendente</span>');
+  const detalhe = pago && (p.dataPagamento || p.formaPagamentoConfirmada)
+    ? [p.dataPagamento ? ('em ' + fmtDataExibir(p.dataPagamento)) : '', p.formaPagamentoConfirmada || '', p.descontoMaquininha ? ('desconto de R$ ' + fmtMoeda(p.descontoMaquininha) + ' na maquininha') : ''].filter(Boolean).join(' · ')
+    : '';
+  const anexo = p.comprovanteUrl ? `<a href="${esc(p.comprovanteUrl)}" target="_blank" rel="noopener" title="Abrir comprovante${p.comprovanteNome ? ': ' + esc(p.comprovanteNome) : ''}">🧾</a>` : '—';
+  tr.innerHTML = `
+    <td data-label="Descrição">↳ Parcela ${idx+1}/${f.parcelas.length}</td>
+    <td data-label="Categoria"></td>
+    <td data-label="Cliente"></td>
+    <td data-label="Vencimento">${fmtDataExibir(p.vencimento)}</td>
+    <td data-label="Data efetiva">${pago && p.dataPagamento ? fmtDataExibir(p.dataPagamento) : '—'}</td>
+    <td data-label="Valor">R$ ${fmtMoeda(p.valor)}</td>
+    <td data-label="Status"${detalhe ? ` title="${esc(detalhe)}"` : ''}>${statusBadge}</td>
+    <td class="anexos-cell" data-label="Anexos">${anexo}</td>
+    <td class="acoes">
+      <button class="btn-icon" onclick="alternarStatusParcela('${f.id}','${p.id}')" title="Marcar como ${pago ? 'pendente' : 'pago/recebido'}">${pago ? '↺' : '✓'}</button>
+    </td>`;
+  return tr;
 }
 // Mantém o lançamento financeiro (a "venda") em sincronia com o orçamento que o gerou —
 // chamado sempre que o orçamento é salvo (ver salvarOrcamento em 08-orcamentos-modelos.js).
@@ -730,13 +1139,14 @@ function abrirRecibo(id){
   document.getElementById('reWhatsapp').textContent = state.empresa.whatsapp || '';
   document.getElementById('reNumero').textContent = f.reciboNumero;
   document.getElementById('reData').textContent = hojeStr();
-  document.getElementById('reValorNum').textContent = 'R$ ' + fmtMoeda(f.valor);
-  document.getElementById('reValorExtenso').textContent = valorPorExtenso(f.valor);
+  const valorRecibo = valorTotalEntry(f);
+  document.getElementById('reValorNum').textContent = 'R$ ' + fmtMoeda(valorRecibo);
+  document.getElementById('reValorExtenso').textContent = valorPorExtenso(valorRecibo);
   const pagoPor = nomeClienteOpcional(f.clienteId) || 'Cliente';
   document.getElementById('rePagoPor').textContent = pagoPor;
   document.getElementById('reFormaPagamento').textContent = (o && o.formasPagamento && o.formasPagamento.length) ? o.formasPagamento.join(', ') : '—';
   document.getElementById('reReferente').textContent = f.descricao || '';
-  document.getElementById('reTexto').textContent = 'Recebi de ' + pagoPor + ' a importância de R$ ' + fmtMoeda(f.valor) + ' (' + valorPorExtenso(f.valor).toLowerCase() + '), referente a ' + (f.descricao || 'pagamento') + '. Para clareza firmo o presente recibo.';
+  document.getElementById('reTexto').textContent = 'Recebi de ' + pagoPor + ' a importância de R$ ' + fmtMoeda(valorRecibo) + ' (' + valorPorExtenso(valorRecibo).toLowerCase() + '), referente a ' + (f.descricao || 'pagamento') + '. Para clareza firmo o presente recibo.';
   document.getElementById('reResponsavel').textContent = state.empresa.responsavel || state.empresa.nome;
   document.getElementById('reAssinaturaDoc').textContent = state.empresa.nome + ' · CNPJ ' + (state.empresa.cnpj || '');
 
@@ -753,21 +1163,22 @@ function abrirRecibo(id){
 function totalFinanceiroPendente(tipo, apenasMesAtual){
   const hoje = new Date();
   return financeiroAtivos()
-    .filter(f => f.tipo === tipo && f.status === 'pendente')
+    .filter(f => f.tipo === tipo && valorPendenteEntry(f) > 0)
     .filter(f => {
       if(!apenasMesAtual) return true;
-      const d = paraDataObj(f.vencimento);
+      const d = paraDataObj(vencimentoEfetivoEntry(f));
       return !!d && d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
     })
-    .reduce((s,f) => s + f.valor, 0);
+    .reduce((s,f) => s + valorPendenteEntry(f), 0);
 }
 // Soma dos lançamentos pendentes de um tipo, dentro do período escolhido no filtro de mês da
-// aba Financeiro ('' = todos os meses, ou uma chave "YYYY-MM" pra um mês específico).
+// aba Financeiro ('' = todos os meses, ou uma chave "YYYY-MM" pra um mês específico). Numa
+// conta com parcelas internas, soma só a parte que ainda falta (valorPendenteEntry).
 function totalFinanceiroPeriodo(tipo, mesAno){
   return financeiroAtivos()
-    .filter(f => f.tipo === tipo && f.status === 'pendente')
+    .filter(f => f.tipo === tipo && valorPendenteEntry(f) > 0)
     .filter(f => !mesAno || chaveMesFinanceiro(f) === mesAno)
-    .reduce((s,f) => s + f.valor, 0);
+    .reduce((s,f) => s + valorPendenteEntry(f), 0);
 }
 // Quantas contas vencidas (pendentes com vencimento no passado) tem de um tipo — não respeita
 // o filtro de mês, porque "vencida" é sobre estar atrasada agora, independente do período em tela.
@@ -781,10 +1192,10 @@ function vencidasPorTipo(tipo){
 // uma previsão), este é pensado pra bater com o saldo de verdade da conta bancária da
 // empresa — é o que resolve compras que "somem" do saldo sem aparecer em lugar nenhum.
 function totalRecebidoReal(){
-  return financeiroAtivos().filter(f => f.tipo === 'receber' && f.status === 'pago').reduce((s,f) => s + (f.valor || 0), 0);
+  return financeiroAtivos().filter(f => f.tipo === 'receber').reduce((s,f) => s + valorEfetivadoEntry(f), 0);
 }
 function totalPagoReal(){
-  return financeiroAtivos().filter(f => f.tipo === 'pagar' && f.status === 'pago').reduce((s,f) => s + (f.valor || 0), 0);
+  return financeiroAtivos().filter(f => f.tipo === 'pagar').reduce((s,f) => s + valorEfetivadoEntry(f), 0);
 }
 function totalComprasReal(){
   return comprasAtivos().reduce((s,c) => s + (c.valor || 0), 0);

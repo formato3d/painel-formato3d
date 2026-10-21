@@ -394,7 +394,8 @@
   .badge.vencido{ background:var(--red-bg); color:var(--red); }
   .badge.desencontrado{ background:var(--amber-bg); color:var(--amber); margin-left:4px; cursor:help; }
   .badge.parcela{ background:var(--surface-2); color:var(--navy); border:1px solid var(--line); margin-left:6px; font-weight:normal; }
-
+  .badge.parcial{ background:var(--badge-neutral-bg); color:var(--navy); }
+  .badge.parcelas-internas{ background:var(--surface-2); color:var(--navy); border:1px solid var(--line); margin-left:6px; font-weight:normal; cursor:help; }
   .count-tag{ font-size:12px; color:var(--gray); }
 
   /* ===== Vínculo orçamento <-> financeiro ===== */
@@ -410,7 +411,18 @@
   .ff-parcelado-aviso{ font-size:11.5px; color:var(--gray); margin-top:8px; }
   .campo-travado{ background:var(--surface-2) !important; color:var(--gray) !important; cursor:not-allowed; }
 
-  /* ===== Itens de orçamento ===== */
+  /* ===== Parcelas internas (uma conta só, detalhada em partes) ===== */
+  .ff-parcela-linha{ border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-top:10px; background:var(--surface-2); }
+  .ff-parcela-linha-topo{ display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+  .ff-parcela-linha-topo .field{ margin-bottom:0; flex:1 1 120px; min-width:110px; }
+  .ff-parcela-num{ font-size:12px; font-weight:bold; color:var(--navy); white-space:nowrap; padding-bottom:9px; }
+  .ff-parcela-linha-baixo{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .ff-parcela-linha-baixo .field{ margin-bottom:0; flex:1 1 180px; }
+  .ff-parcela-vazio{ font-size:12.5px; color:var(--gray); font-style:italic; margin:6px 0; }
+  tr.financeiro-linha-parcela td{ background:var(--surface-2); font-size:12.5px; color:var(--gray); }
+  tr.financeiro-linha-parcela td[data-label="Descrição"]{ padding-left:26px; font-style:italic; }
+
+/* ===== Itens de orçamento ===== */
   table.itens-orc{ width:100%; border-collapse:collapse; margin-bottom:10px; }
   table.itens-orc th{ background:var(--th-soft); color:var(--navy); text-align:left; padding:8px; font-size:12px; }
   table.itens-orc td{ padding:6px; border-bottom:1px solid var(--line); }
@@ -1174,6 +1186,7 @@ Obrigado pela preferência!</textarea></div>
         <select id="filtroStatusFin" onchange="renderFinanceiro()">
           <option value="">Todos os status</option>
           <option value="pendente">Pendente</option>
+          <option value="parcial">Parcial</option>
           <option value="pago">Pago/Recebido</option>
         </select>
       </div>
@@ -1211,7 +1224,7 @@ Obrigado pela preferência!</textarea></div>
         </div>
         <div class="field"><label>Descrição *</label><input id="ffDescricao"></div>
         <div class="field"><label id="ffValorLabel">Valor (R$) *</label><input id="ffValor" placeholder="0,00" oninput="atualizarPreviewParcelas()"></div>
-        <div class="field"><label id="ffVencimentoLabel">Vencimento</label><input id="ffVencimento" placeholder="dd/mm/aaaa" oninput="atualizarPreviewParcelas()"></div>
+        <div class="field" id="ffVencimentoCampo"><label id="ffVencimentoLabel">Vencimento</label><input id="ffVencimento" placeholder="dd/mm/aaaa" oninput="atualizarPreviewParcelas()"></div>
       </div>
       <div class="ff-parcelado-bloco hidden" id="ffParceladoBloco">
         <label class="chk"><input type="checkbox" id="ffParcelado" onchange="alternarParcelamento()"> Parcelar esta conta automaticamente</label>
@@ -1228,16 +1241,28 @@ Obrigado pela preferência!</textarea></div>
         </div>
         <div class="ff-parcelado-aviso">O valor acima é o valor total da compra/venda — o painel divide igualmente entre as parcelas (a 1ª usa a data de Vencimento informada) e cria um lançamento pendente pra cada uma, já com a data de vencimento certa. Depois de criadas, cada parcela é editada, marcada como paga e excluída separadamente.</div>
       </div>
+      <div class="ff-parcelado-bloco" id="ffParcelasInternasBloco">
+        <label class="chk"><input type="checkbox" id="ffUsarParcelas" onchange="alternarUsoParcelas()"> Receber/pagar em partes (mesma conta — ex.: sinal + entrega)</label>
+        <div class="ff-parcelado-aviso">Diferente de "Parcelar automaticamente" acima (que cria várias contas separadas), isso continua sendo UMA conta só — o valor total é dividido em partes com valor, vencimento e status próprios, tudo dentro deste lançamento.</div>
+        <div class="hidden" id="ffParcelasInternasCampos">
+          <div id="ffParcelasLista"></div>
+          <button type="button" class="btn secondary" style="margin-top:8px;" onclick="adicionarParcelaEdit()">+ Adicionar parcela</button>
+          <div class="ff-parcela-preview" id="ffParcelasTotalPreview" style="margin-top:10px;">—</div>
+        </div>
+      </div>
       <div class="form-grid">
         <div class="field"><label>Categoria</label><input id="ffCategoria" placeholder="Fornecedor, aluguel, venda..."></div>
         <div class="field"><label>Cliente vinculado (opcional)</label><select id="ffCliente"><option value="">—</option></select></div>
-        <div class="field"><label>Status</label>
-          <select id="ffStatus" onchange="atualizarCampoDataPagamento()">
-            <option value="pendente">Pendente</option>
-            <option value="pago">Pago/Recebido</option>
-          </select>
+        <div class="field hidden" id="ffParcelasResumoStatus"><label>Status geral</label><div class="ff-parcela-preview" id="ffParcelasResumoTexto">—</div></div>
+        <div id="ffStatusDataCampos" style="display:contents;">
+          <div class="field"><label>Status</label>
+            <select id="ffStatus" onchange="atualizarCampoDataPagamento()">
+              <option value="pendente">Pendente</option>
+              <option value="pago">Pago/Recebido</option>
+            </select>
+          </div>
+          <div class="field"><label>Data efetiva (pagamento)</label><input id="ffDataPagamento" placeholder="dd/mm/aaaa"></div>
         </div>
-        <div class="field"><label>Data efetiva (pagamento)</label><input id="ffDataPagamento" placeholder="dd/mm/aaaa"></div>
       </div>
       <div class="form-grid wide">
         <div class="field">
@@ -1251,7 +1276,7 @@ Obrigado pela preferência!</textarea></div>
             <button type="button" onclick="removerAnexoFinanceiro('boleto')">Remover</button>
           </div>
         </div>
-        <div class="field">
+        <div class="field" id="ffAnexoComprovanteCampo">
           <label>Comprovante de pagamento (opcional)</label>
           <div class="file-upload" id="ffAnexoComprovanteUpload">
             <input type="file" id="ffAnexoComprovante" accept="application/pdf,image/png,image/jpeg,image/webp" onchange="processarAnexoFinanceiro(this,'comprovante')">

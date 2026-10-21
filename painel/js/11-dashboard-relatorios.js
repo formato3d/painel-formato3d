@@ -24,8 +24,8 @@ function renderDashboard(){
   `;
 
   const venc = financeiroAtivos()
-    .filter(f => f.status === 'pendente' && f.vencimento)
-    .map(f => ({f, d: paraDataObj(f.vencimento)}))
+    .filter(f => statusResumoEntry(f) !== 'pago' && vencimentoEfetivoEntry(f))
+    .map(f => ({f, d: paraDataObj(vencimentoEfetivoEntry(f))}))
     .filter(x => x.d)
     .sort((a,b) => a.d - b.d)
     .slice(0, 8);
@@ -34,7 +34,7 @@ function renderDashboard(){
   venc.forEach(({f}) => {
     const vencido = estaVencido(f);
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td data-label="Descrição">${esc(f.descricao)}</td><td data-label="Tipo"><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'Pagar' : 'Receber'}</span></td><td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td><td data-label="Vencimento" style="${vencido?'color:#c0392b;font-weight:bold;':''}">${fmtDataExibir(f.vencimento)}</td><td data-label="Valor">R$ ${fmtMoeda(f.valor)}</td>`;
+    tr.innerHTML = `<td data-label="Descrição">${esc(f.descricao)}</td><td data-label="Tipo"><span class="badge ${f.tipo}">${f.tipo === 'pagar' ? 'Pagar' : 'Receber'}</span></td><td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td><td data-label="Vencimento" style="${vencido?'color:#c0392b;font-weight:bold;':''}">${fmtDataExibir(vencimentoEfetivoEntry(f))}</td><td data-label="Valor">R$ ${fmtMoeda(valorPendenteEntry(f))}</td>`;
     corpoVenc.appendChild(tr);
   });
 
@@ -57,9 +57,9 @@ function renderDashboard(){
 function financeiroDoDia(tipo){
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   return financeiroAtivos()
-    .filter(f => f.tipo === tipo && f.status === 'pendente' && f.vencimento)
+    .filter(f => f.tipo === tipo && statusResumoEntry(f) !== 'pago' && vencimentoEfetivoEntry(f))
     .filter(f => {
-      const d = paraDataObj(f.vencimento);
+      const d = paraDataObj(vencimentoEfetivoEntry(f));
       if(!d) return false;
       d.setHours(0,0,0,0);
       return d.getTime() === hoje.getTime();
@@ -68,7 +68,7 @@ function financeiroDoDia(tipo){
 }
 function renderQuadroContasDoDia(tipo, idSubtitulo, idCorpo, mensagemVazio){
   const lista = financeiroDoDia(tipo);
-  const total = lista.reduce((s,f) => s + f.valor, 0);
+  const total = lista.reduce((s,f) => s + valorPendenteEntry(f), 0);
   document.getElementById(idSubtitulo).textContent = lista.length
     ? lista.length + ' conta' + (lista.length > 1 ? 's' : '') + ' · R$ ' + fmtMoeda(total)
     : 'Nada vencendo hoje';
@@ -76,7 +76,7 @@ function renderQuadroContasDoDia(tipo, idSubtitulo, idCorpo, mensagemVazio){
   corpo.innerHTML = lista.length === 0 ? `<tr class="empty-row"><td colspan="3">${mensagemVazio}</td></tr>` : '';
   lista.forEach(f => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td data-label="Descrição">${esc(f.descricao)}</td><td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td><td data-label="Valor">R$ ${fmtMoeda(f.valor)}</td>`;
+    tr.innerHTML = `<td data-label="Descrição">${esc(f.descricao)}</td><td data-label="Cliente">${esc(nomeClienteOpcional(f.clienteId))}</td><td data-label="Valor">R$ ${fmtMoeda(valorPendenteEntry(f))}</td>`;
     corpo.appendChild(tr);
   });
 }

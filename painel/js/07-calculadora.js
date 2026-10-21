@@ -80,11 +80,19 @@ function calcularOrcamento3D(){
   // Taxa de perdas/refugo: nem toda impressão dá certo. Se X% das tentativas falham (peça
   // empenou, faltou filamento, entupiu o bico etc.), o custo de UMA peça que efetivamente
   // vira produto vendável precisa embutir o custo das tentativas que falharam no caminho —
-  // por isso o custo de fabricação é "engordado" dividindo por (1 - taxaPerda/100), o
-  // mesmo princípio matemático usado mais abaixo pra comissão do cartão. Com taxaPerda=0
-  // (padrão), custoTotal fica igual a custoFabricacao, sem nenhuma mudança de comportamento.
+  // por isso esse custo é "engordado" dividindo por (1 - taxaPerda/100), o mesmo princípio
+  // matemático usado mais abaixo pra comissão do cartão. IMPORTANTE: só entram nessa conta
+  // os custos que realmente se perdem numa tentativa que falha — filamento, energia e o
+  // desgaste da impressora durante a impressão. Embalagem e mão de obra (modelagem,
+  // pós-processamento) só acontecem pra peça que efetivamente dá certo e é entregue — uma
+  // tentativa falhada não é embalada nem pós-processada — então esses dois custos NÃO
+  // devem ser multiplicados pela taxa de perda (senão o preço fica inflado artificialmente
+  // quanto maior for a embalagem/mão de obra e a taxa de perda). Com taxaPerda=0 (padrão),
+  // custoTotal fica igual a custoFabricacao, sem nenhuma mudança de comportamento.
+  const custoSujeitoAPerda = custoFilamento + custoEnergia + custoDesgaste;
+  const custoPosProducao = embalagem + custoMaoDeObra;
   const taxaPerda = Math.min(95, Math.max(0, parseFloat(document.getElementById('calcTaxaPerda').value) || 0));
-  const custoTotal = taxaPerda < 100 ? custoFabricacao / (1 - taxaPerda / 100) : custoFabricacao;
+  const custoTotal = taxaPerda < 100 ? (custoSujeitoAPerda / (1 - taxaPerda / 100)) + custoPosProducao : custoFabricacao;
   const custoPerdas = custoTotal - custoFabricacao;
 
   // MARKUP: percentual aplicado sobre o CUSTO pra chegar no preço base (ver item 7 da

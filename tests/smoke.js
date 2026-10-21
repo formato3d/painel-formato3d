@@ -976,6 +976,142 @@ function assert(condicao, mensagem){
   await page.waitForTimeout(900);
   assert(await page.evaluate(() => document.body.classList.contains('autenticado')), 're-autentica normalmente pra continuar os próximos testes');
 
+  console.log('Grupo: parcelas internas (uma conta só, recebida/paga em partes — ex.: sinal + entrega)');
+  await page.evaluate(() => { mostrarAba('financeiro'); mostrarAbaFinanceiro('receber'); });
+  await page.waitForTimeout(150);
+  await page.evaluate(() => abrirFormFinanceiro());
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('ffParcelasInternasBloco') !== null && !document.getElementById('ffUsarParcelas').checked), 'o bloco de parcelas internas aparece no formulário de uma conta nova, desligado por padrão');
+  await page.evaluate(() => {
+    document.getElementById('ffTipo').value = 'receber';
+    document.getElementById('ffDescricao').value = 'Orçamento parcelas internas CI';
+    document.getElementById('ffValor').value = '1000,00';
+    document.getElementById('ffVencimento').value = hojeStr();
+    document.getElementById('ffUsarParcelas').checked = true;
+    alternarUsoParcelas();
+  });
+  await page.waitForTimeout(100);
+  const seedInfo = await page.evaluate(() => ({
+    camposVisiveis: !document.getElementById('ffParcelasInternasCampos').classList.contains('hidden'),
+    valorTravado: document.getElementById('ffValor').readOnly,
+    vencimentoEscondido: document.getElementById('ffVencimentoCampo').classList.contains('hidden'),
+    statusDataEscondido: document.getElementById('ffStatusDataCampos').classList.contains('hidden'),
+    qtd: ffParcelasEdit.length,
+    somaInicial: ffParcelasEdit.reduce((s,p) => s + p.valor, 0)
+  }));
+  assert(seedInfo.camposVisiveis, 'ligar "receber em partes" mostra os campos de parcelas');
+  assert(seedInfo.valorTravado, 'o campo Valor vira travado (calculado a partir da soma das parcelas) quando usa parcelas internas');
+  assert(seedInfo.vencimentoEscondido && seedInfo.statusDataEscondido, 'os campos de Vencimento/Status/Data efetiva "da conta inteira" ficam escondidos quando usa parcelas internas (cada parte tem os seus)');
+  assert(seedInfo.qtd === 2, 'ligar pela 1ª vez já semeia 2 parcelas (sinal + entrega), a partir do valor total digitado');
+  assert(seedInfo.somaInicial === 1000, 'a soma das 2 parcelas semeadas bate com o valor total digitado (500 + 500)');
+
+  // Ajusta pra um caso mais real: 1ª parcela (sinal) já paga hoje, 2ª (entrega) ainda pendente numa data futura.
+  await page.evaluate(() => {
+    document.getElementById('ffParcValor_0').value = '600,00';
+    atualizarParcelaCampo(0, 'valor', '600,00');
+    document.getElementById('ffParcStatus_0').value = 'pago';
+    alternarStatusParcelaEdit(0);
+    document.getElementById('ffParcValor_1').value = '400,00';
+    atualizarParcelaCampo(1, 'valor', '400,00');
+    document.getElementById('ffParcVenc_1').value = somarDias(hojeStr(), 10);
+    atualizarParcelaCampo(1, 'vencimento', somarDias(hojeStr(), 10));
+  });
+  await page.waitForTimeout(100);
+  assert(await page.evaluate(() => document.getElementById('ffValor').value === '1.000,00'), 'o Valor total mostrado acompanha a soma das parcelas em tempo real (600 + 400 = 1000)');
+  await page.evaluate(() => salvarFinanceiro());
+  await page.waitForTimeout(900);
+  const finParcId = await page.evaluate(() => financeiroAtivos().find(f => f.descricao === 'Orçamento parcelas internas CI').id);
+  const salvo1 = await page.evaluate((id) => {
+    const f = state.financeiro.find(x => x.id === id);
+    return { parcelasN: f.parcelas.length, valor: f.valor, status: f.status, statusResumo: statusResumoEntry(f), dataPagamento: f.dataPagamento };
+  }, finParcId);
+  assert(salvo1.parcelasN === 2, 'a conta salva fica com as 2 parcelas dentro de f.parcelas');
+  assert(salvo1.valor === 1000, 'f.valor guardado é a soma das parcelas (600 + 400 = 1000)');
+  assert(salvo1.statusResumo === 'parcial', 'com 1 de 2 parcelas pagas, o status resumido é "parcial"');
+  assert(salvo1.status === 'pendente', 'o campo f.status legado (só entende pendente/pago) fica como "pendente" enquanto não estiver tudo pago — "parcial" só existe no resumo calculado');
+
+  await page.evaluate(() => mostrarAbaFinanceiro('receber'));
+  await page.waitForTimeout(150);
+  const tabelaParcial = await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent);
+  assert(tabelaParcial.includes('Orçamento parcelas internas CI') && /Parcial/.test(tabelaParcial), 'a linha da conta aparece na tabela com o badge "Parcial"');
+  assert(await page.evaluate((id) => !!document.querySelector(`tr#financeiro-linha-${id} + tr.financeiro-linha-parcela`), finParcId), 'o detalhamento das parcelas aparece como sub-linhas logo abaixo da conta');
+  assert(tabelaParcial.includes('R$ 1.000,00'), 'a coluna Valor mostra o total da conta (soma das parcelas), não só a parte paga');
+
+  const totaisParcial = await page.evaluate(() => ({ recebido: totalRecebidoReal() }));
+  assert(totaisParcial.recebido >= 600, 'totalRecebidoReal() já conta a parcela paga (R$ 600) mesmo a conta não estando 100% paga');
+
+  // Marca a 2ª parcela (pendente) como paga, pela ação da própria sub-linha da tabela.
+  const parc2Id = await page.evaluate((id) => state.financeiro.find(f => f.id === id).parcelas[1].id, finParcId);
+  await page.evaluate((args) => { alternarStatusParcela(args.id, args.parcId); }, { id: finParcId, parcId: parc2Id });
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => !document.getElementById('confirmarPagamentoWrap').classList.contains('hidden')), 'clicar em ✓ numa parcela pendente abre o mesmo pop-up de confirmação, já com o valor daquela parcela');
+  assert(await page.evaluate(() => document.getElementById('cfValor').value === '400,00'), 'o pop-up vem preenchido com o valor só daquela parcela (R$ 400), não o total da conta');
+  await page.evaluate(() => { window.confirm = () => false; confirmarPagamentoSalvar(); });
+  await page.waitForTimeout(900);
+  const salvo2 = await page.evaluate((id) => {
+    const f = state.financeiro.find(x => x.id === id);
+    return { status: f.status, statusResumo: statusResumoEntry(f), dataPagamento: f.dataPagamento };
+  }, finParcId);
+  assert(salvo2.statusResumo === 'pago', 'depois de pagar as 2 parcelas, o status resumido vira "pago"');
+  assert(salvo2.status === 'pago', 'o campo f.status legado também vira "pago" quando todas as parcelas estão pagas (compatível com quem só olha esse campo)');
+  assert(!!salvo2.dataPagamento, 'f.dataPagamento (legado) fica preenchido com a data da última parcela paga');
+
+  await page.evaluate(() => mostrarAbaFinanceiro('receber'));
+  await page.waitForTimeout(150);
+  const tabelaPaga = await page.evaluate(() => document.getElementById('corpoTabelaFinanceiro').textContent);
+  assert(/Pago\/Recebido/.test(tabelaPaga) && tabelaPaga.includes('Orçamento parcelas internas CI'), 'depois de pagar tudo, a linha mostra o badge normal "Pago/Recebido" (não mais "Parcial")');
+  const totaisPago = await page.evaluate(() => ({ recebido: totalRecebidoReal() }));
+  assert(totaisPago.recebido >= 1000 && totaisPago.recebido > totaisParcial.recebido, 'totalRecebidoReal() sobe pro total assim que a última parcela é confirmada');
+
+  // Desfazer a 2ª parcela volta a conta pra "parcial".
+  await page.evaluate((args) => { alternarStatusParcela(args.id, args.parcId); }, { id: finParcId, parcId: parc2Id });
+  await page.waitForTimeout(900);
+  assert(await page.evaluate((id) => statusResumoEntry(state.financeiro.find(f => f.id === id)) === 'parcial', finParcId), 'desfazer (↺) o pagamento de uma parcela volta o status resumido da conta pra "parcial"');
+
+  // Reabrir pra editar: as parcelas salvas aparecem de volta no formulário, prontas pra ajustar.
+  await page.evaluate((id) => abrirFormFinanceiro(id), finParcId);
+  await page.waitForTimeout(150);
+  assert(await page.evaluate(() => document.getElementById('ffUsarParcelas').checked === true), 'reabrir uma conta que já tem parcelas internas vem com a opção já ligada');
+  assert(await page.evaluate(() => ffParcelasEdit.length === 2), 'as 2 parcelas salvas aparecem de volta no formulário pra editar');
+  await page.evaluate(() => fecharFormFinanceiro());
+
+  // Vínculo com orçamento: a soma das parcelas tem que bater com o total do orçamento.
+  await page.evaluate(() => {
+    const clienteId = state.clientes[0].id;
+    const o = {
+      id:'orc_parc_ci', numero: state.proximoNumero, clienteId, data: hojeStr(), validadeDias:'7',
+      status:'Aprovado', frete:0, desconto:0, total:300, obs:'', financeiroGerado:false, estoqueBaixado:true,
+      condicaoPagamento:'', formasPagamento:['Pix'], itens:[{ produtoId:null, cod:'', descricao:'Item orc parcelas', qtd:1, valorUnit:300, custoUnit:0 }]
+    };
+    state.orcamentos.push(o);
+    state.proximoNumero++;
+    gerarContaReceber('orc_parc_ci');
+    marcarAlterado();
+  });
+  await page.waitForTimeout(900);
+  const finOrcParcId = await page.evaluate(() => state.financeiro.find(f => f.orcamentoId === 'orc_parc_ci').id);
+  await page.evaluate((id) => abrirFormFinanceiro(id), finOrcParcId);
+  await page.waitForTimeout(150);
+  await page.evaluate(() => {
+    document.getElementById('ffUsarParcelas').checked = true;
+    alternarUsoParcelas();
+    // Desliga pra forçar a soma ficar diferente do total do orçamento (300): deixa só 1 parcela de 100.
+    ffParcelasEdit = [Object.assign(parcelaEditVazia(), { valor: 100, vencimento: hojeStr() })];
+    renderFfParcelasLista();
+  });
+  const alertaMismatch = await page.evaluate(() => {
+    window.__alertaParc = null;
+    const orig = window.alert;
+    window.alert = (msg) => { window.__alertaParc = msg; };
+    salvarFinanceiro();
+    window.alert = orig;
+    return window.__alertaParc;
+  });
+  await page.waitForTimeout(150);
+  assert(!!alertaMismatch && /não bate com o total do orçamento/i.test(alertaMismatch), 'salvar com a soma das parcelas diferente do total do orçamento vinculado é bloqueado com um aviso claro');
+  assert(await page.evaluate(() => !document.getElementById('formFinanceiroWrap').classList.contains('hidden')), 'o formulário continua aberto depois do bloqueio (não perde o que a pessoa digitou)');
+  await page.evaluate(() => fecharFormFinanceiro());
+
   console.log('Grupo: exportar Excel não quebra mesmo sem a lib carregada');
   const exportResult = await page.evaluate(() => {
     try { exportarFinanceiroExcel(); return 'sem erro'; } catch(e) { return 'ERRO: ' + e.message; }

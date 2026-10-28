@@ -17,7 +17,8 @@ const C3_FIXOS = {
   c3Fil: '120,00', c3Watts: '150', c3Kwh: '1,20', c3Maq: '4805,00', c3Vida: '5000',
   c3Manut: '0,30', c3Falha: '10', c3Hora: '27,30', c3FixoMes: '100,00', c3HorasMes: '200',
   c3MesasDia: '2', c3Taxa: '3,09', c3TaxaFixa: '0,00', c3Imp: '0',
-  c3Deb: '0,89', c3C1: '3,09', c3C2: '5,79', c3C3: '6,09'
+  c3Deb: '0,89', c3C1: '3,09', c3C2: '5,79', c3C3: '6,09', c3C4: '7,99', c3C5: '8,09',
+  c3C6: '', c3C7: '', c3C8: '', c3C9: '', c3C10: '', c3C11: '', c3C12: ''
 };
 const C3_PECA = {
   c3Nome: '', c3PorMesa: '1', c3Pedido: '1', c3Gramas: '', c3Horas: '', c3Min: '',
@@ -105,14 +106,24 @@ function c3MontarTela(){
           </div>
           <h4>Taxas do cartão (repassar ao cliente)</h4>
           <div class="c3-grid">
-            ${C('c3Deb','Débito','','','%')}${C('c3C1','Crédito 1x','','','%')}${C('c3C2','Crédito 2x','','','%')}${C('c3C3','Crédito 3x','','','%')}
+            ${C('c3Deb','Débito','','','%')}${[1,2,3,4,5,6,7,8,9,10,11,12].map(n => C('c3C' + n, 'Crédito ' + n + 'x', '', '', '%')).join('')}
           </div>
+          <small class="c3-dica">Deixe em branco as parcelas que você não oferece.</small>
         </details>
 
         <div class="form-actions c3-acoes">
           <button class="btn" type="button" onclick="c3NovaPeca()" title="Limpa só os campos de Esta peça. As configurações fixas continuam como estão.">Limpar esta peça</button>
           <button class="btn" type="button" onclick="c3CopiarResumo()">Copiar resumo</button>
           <span class="c3-msg" id="c3Msg"></span>
+        </div>
+
+        <div class="box c3-parc">
+          <h3>Simulador de parcelamento</h3>
+          <small class="c3-dica">Digite quanto você quer receber. Mostra quanto cobrar do cliente em cada forma de pagamento, repassando a taxa (usa as taxas das configurações fixas).</small>
+          <div class="c3-grid" style="margin-top:8px">
+            <div class="field"><label>Quero receber</label><div class="c3-in"><span>R$</span><input id="c3ParcValor" inputmode="decimal" placeholder="0,00" oninput="c3SimularParcelado()"></div></div>
+          </div>
+          <div id="c3ParcTab"></div>
         </div>
       </div>
 
@@ -297,7 +308,7 @@ function c3Calcular(){
     const liq = unit * pedido;
     r.sim = {unit, liq, rows: [['Pix', 0, 1], ['Débito', c3Num('c3Deb'), 1], ['Crédito 1x', c3Num('c3C1'), 1],
       ['Crédito 2x', c3Num('c3C2'), 2], ['Crédito 3x', c3Num('c3C3'), 3]].map(([n, t, x]) => {
-        const parc = Math.ceil(liq / (1 - Math.min(t, 90) / 100) / x * 100 - 1e-9) / 100;
+        const parc = c3Parcela(liq, t, x);
         return {n, t, x, parc, tot: parc * x};
       })};
   }
@@ -318,6 +329,7 @@ function calcularOrcamento3D(){
   c3MontarTela();
   if(!document.getElementById('c3Nome')) return;
   c3SalvarFixos();
+  c3SimularParcelado();
   const r = c3Calcular();
   c3Ultimo = r;
   document.getElementById('c3Deprec').value = c3R(r.deprecHora) + '/h';
@@ -391,6 +403,31 @@ function calcularOrcamento3D(){
     Object.keys(r.itens).filter(k => r.itens[k] > 0)
       .map(k => [k, c3R(r.itens[k]) + ' <small style="color:var(--gray);font-weight:normal">' + Math.round(r.itens[k] / tot * 100) + '%</small>'])
       .concat([['Custo total por peça', c3R(r.custo), 'destaque']]));
+}
+
+// mesma conta do app do banco: total = valor ÷ (1 − taxa), arredondado no centavo; parcela = total ÷ nº de parcelas
+function c3Parcela(liq, t, x){
+  const total = Math.round(liq / (1 - Math.min(t, 90) / 100) * 100 + 1e-7) / 100;
+  return Math.round(total / x * 100 + 1e-7) / 100;
+}
+
+// simulador avulso: valor que quer receber -> quanto cobrar em cada forma de pagamento
+function c3SimularParcelado(){
+  const box = document.getElementById('c3ParcTab');
+  if(!box) return;
+  const liq = c3Num('c3ParcValor');
+  if(!liq){ box.innerHTML = ''; return; }
+  const opcoes = [['Pix', 0, 1], ['Débito', c3Num('c3Deb'), 1]];
+  for(let n = 1; n <= 12; n++){
+    const el = document.getElementById('c3C' + n);
+    if(el && String(el.value).trim() !== '') opcoes.push(['Crédito ' + n + 'x', c3Num('c3C' + n), n]);
+  }
+  box.innerHTML = '<div class="calc-linha" style="font-size:11.5px"><span>Forma de pagamento</span><span>Cliente paga</span></div>' +
+    c3Linhas(opcoes.map(([nome, t, x]) => {
+      const parc = c3Parcela(liq, t, x);
+      return [nome + ' <small style="color:var(--gray)">' + c3Pct(t, 2).replace(',00%', '%') + '</small>',
+        x > 1 ? x + 'x de ' + c3R(parc) + '<br><small style="color:var(--gray);font-weight:normal">total ' + c3R(parc * x) + '</small>' : c3R(parc)];
+    })) + '<div class="calc-note">Em todas as opções você recebe ' + c3R(liq) + '.</div>';
 }
 
 function c3NovaPeca(){

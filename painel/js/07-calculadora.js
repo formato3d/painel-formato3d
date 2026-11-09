@@ -17,12 +17,14 @@ const C3_FIXOS = {
   c3Fil: '120,00', c3Watts: '150', c3Kwh: '1,20', c3Maq: '4805,00', c3Vida: '5000',
   c3Manut: '0,30', c3Falha: '10', c3Hora: '27,30', c3FixoMes: '100,00', c3HorasMes: '200',
   c3MesasDia: '2', c3Taxa: '3,09', c3TaxaFixa: '0,00', c3Imp: '0',
+  c3L1: '3,99', c3L2: '5,99',
   c3Deb: '0,89', c3C1: '3,09', c3C2: '5,79', c3C3: '6,09', c3C4: '7,99', c3C5: '8,09',
   c3C6: '', c3C7: '', c3C8: '', c3C9: '', c3C10: '', c3C11: '', c3C12: ''
 };
 const C3_PECA = {
-  c3Nome: '', c3PorMesa: '1', c3Pedido: '1', c3Gramas: '', c3Horas: '', c3Min: '',
-  c3Trab: '', c3Insumos: '', c3Emb: '', c3Margem: '40', c3Pretendido: ''
+  c3Nome: '', c3Pedido: '1', c3Gramas: '', c3Horas: '', c3Min: '', c3NMesas: '1', c3Rende: '1',
+  c3TrabMesa: '', c3Montagem: '',
+  c3Insumos: '', c3Emb: '', c3Margem: '40', c3Pretendido: ''
 };
 
 function c3Num(id){
@@ -56,23 +58,39 @@ function c3MontarTela(){
   const C = c3Campo;
   sec.innerHTML = `
     <div class="panel-header"><h2 class="section-title">🧮 Calculadora 3D</h2></div>
-    <p class="modal-sub" style="margin-top:-8px;">Preencha "Esta peça" para cada produto. As configurações fixas ficam salvas neste navegador. O preço já cobre filamento, energia, desgaste, manutenção, falhas, seu tempo, custos do mês, taxas e o lucro.</p>
+    <p class="modal-sub" style="margin-top:-8px;">Preencha "Este produto" e cadastre cada mesa que você imprime para fazê-lo. As configurações fixas ficam salvas neste navegador. O preço já cobre filamento, energia, desgaste, manutenção, falhas, seu tempo, custos do mês, taxas e o lucro.</p>
     <div class="calc-wrap">
       <div class="c3-col">
         <div class="box c3-main">
-          <h3>Esta peça</h3>
+          <h3>1. Este produto</h3>
           <div class="c3-grid">
-            <div class="field"><label>Nome da peça <span class="c3-tag">Peça</span></label><div class="c3-in"><input id="c3Nome" placeholder="Ex: Chaveiro" oninput="calcularOrcamento3D()"></div></div>
-            ${C('c3PorMesa','Peças por mesa','quantas saem na mesma impressão','','un','Peça')}
-            ${C('c3Pedido','Quantidade do pedido','1 para venda avulsa','','un','Pedido')}
-            ${C('c3Gramas','Filamento gasto','da mesa inteira, do fatiador','','g','Material')}
-            <div class="field"><label>Tempo de impressão <span class="c3-tag">Impressão</span><small class="c3-dica">da mesa inteira</small></label>
+            <div class="field"><label>Nome do produto</label><div class="c3-in"><input id="c3Nome" placeholder="Ex: Boneco articulado" oninput="calcularOrcamento3D()"></div></div>
+            ${C('c3Pedido','Quantidade do pedido','1 para venda avulsa','','un')}
+          </div>
+
+          <h4 class="c3-h4">2. Impressão (totais do fatiador)</h4>
+          <small class="c3-dica">Fatie todas as mesas do produto e some. Ex.: árvore com 3 mesas que vira 1 produto.</small>
+          <div class="c3-grid" style="margin-top:6px">
+            ${C('c3Gramas','Filamento total','soma de todas as mesas','','g')}
+            <div class="field"><label>Tempo total<small class="c3-dica">soma de todas as mesas</small></label>
               <div class="c3-dupla"><div class="c3-in"><input id="c3Horas" inputmode="decimal" placeholder="0" oninput="calcularOrcamento3D()"><span>h</span></div><div class="c3-in"><input id="c3Min" inputmode="decimal" placeholder="0" oninput="calcularOrcamento3D()"><span>min</span></div></div></div>
-            ${C('c3Trab','Tempo de trabalho por mesa','fatiar, tirar da mesa, limpar, embalar','','min','Trabalho')}
-            ${C('c3Insumos','Outros insumos','por peça: argola, ímã, parafuso, tinta','R$','','Material')}
-            ${C('c3Emb','Embalagem','por peça','R$','','Material')}
-            ${C('c3Margem','Margem de lucro','sobre o preço final','','%','Venda')}
-            ${C('c3Pretendido','Preço que pretende cobrar','opcional, para conferir','R$','','Venda')}
+            ${C('c3NMesas','Quantas mesas','número de impressões','','mesas')}
+            ${C('c3Rende','Quantos produtos saem','dessas mesas: árvore = 1, mesa de 12 chaveiros = 12','','un')}
+          </div>
+          <div class="c3-dica" id="c3MesasResumo" style="margin-top:4px"></div>
+
+          <h4 class="c3-h4">3. Seu trabalho e materiais extras</h4>
+          <div class="c3-grid">
+            ${C('c3TrabMesa','Tempo por mesa','fatiar, tirar da mesa, limpar suporte','','min')}
+            ${C('c3Montagem','Montagem e acabamento','por produto: colar, encaixar, lixar, embalar','','min')}
+            ${C('c3Insumos','Outros insumos','por produto: ímã, parafuso, cola, argola','R$','')}
+            ${C('c3Emb','Embalagem','por produto','R$','')}
+          </div>
+
+          <h4 class="c3-h4">4. Venda</h4>
+          <div class="c3-grid">
+            ${C('c3Margem','Margem de lucro','sobre o preço final','','%')}
+            ${C('c3Pretendido','Preço que pretende cobrar','opcional, para conferir','R$','')}
           </div>
         </div>
 
@@ -95,8 +113,8 @@ function c3MontarTela(){
           <div class="c3-grid">
             ${C('c3Hora','Valor da sua hora','meta do mês ÷ horas trabalhadas','R$','/h')}
             ${C('c3FixoMes','Custos fixos do mês','MEI/DAS, internet, ferramentas','R$','')}
-            ${C('c3HorasMes','Horas impressas por mês','para dividir os fixos','','h')}
-            ${C('c3MesasDia','Mesas por dia','para estimar o prazo','','mesas')}
+            ${C('c3HorasMes','Horas impressas por mês','somando todas as impressoras','','h')}
+            ${C('c3MesasDia','Mesas por dia','somando todas as impressoras (prazo)','','mesas')}
           </div>
           <h4>Venda</h4>
           <div class="c3-grid">
@@ -104,7 +122,11 @@ function c3MontarTela(){
             ${C('c3TaxaFixa','Taxa fixa por venda','','R$','')}
             ${C('c3Imp','Imposto sobre venda','MEI: 0 (já está no DAS)','','%')}
           </div>
-          <h4>Taxas do cartão (repassar ao cliente)</h4>
+          <h4>Taxas do link de pagamento</h4>
+          <div class="c3-grid">
+            ${C('c3L1','Link à vista (1x)','','','%')}${C('c3L2','Link 2x','','','%')}
+          </div>
+          <h4>Taxas da maquininha (repassar ao cliente)</h4>
           <div class="c3-grid">
             ${C('c3Deb','Débito','','','%')}${[1,2,3,4,5,6,7,8,9,10,11,12].map(n => C('c3C' + n, 'Crédito ' + n + 'x', '', '', '%')).join('')}
           </div>
@@ -112,7 +134,7 @@ function c3MontarTela(){
         </details>
 
         <div class="form-actions c3-acoes">
-          <button class="btn" type="button" onclick="c3NovaPeca()" title="Limpa só os campos de Esta peça. As configurações fixas continuam como estão.">Limpar esta peça</button>
+          <button class="btn" type="button" onclick="c3NovaPeca()" title="Limpa só os campos de Este produto. As configurações fixas continuam como estão.">Limpar produto</button>
           <button class="btn" type="button" onclick="c3CopiarResumo()">Copiar resumo</button>
           <span class="c3-msg" id="c3Msg"></span>
         </div>
@@ -128,13 +150,22 @@ function c3MontarTela(){
       </div>
 
       <div class="calc-result c3-res">
-        <h3>Preço sugerido por peça</h3>
-        <div class="c3-preco" id="calcOutPrecoVenda">R$ 0,00</div>
-        <div class="c3-sub" id="c3Sub"></div>
+        <div class="c3-cli" id="c3Cli" style="margin-top:0">
+          <div class="c3-cli-tit"><span>Preço para o cliente</span>
+            <div class="c3-modo" role="group" aria-label="Forma de cobrança"><button type="button" id="c3ModoMaq" onclick="c3SetModo('maq')">Maquininha / Tap to Pay</button><button type="button" id="c3ModoLink" onclick="c3SetModo('link')">Link de pagamento</button></div></div>
+          <small class="c3-dica" id="c3CliSub" style="margin-top:4px"></small>
+          <div class="c3-cli-grid">
+            <div><small>Pix</small><b id="c3CliPix">—</b><span id="c3CliPixT"></span></div>
+            <div><small id="c3CliC1L">Crédito 1x</small><b id="c3CliC1">—</b><span id="c3CliC1T"></span></div>
+            <div><small id="c3CliC2L">Crédito 2x</small><b id="c3CliC2">—</b><span id="c3CliC2T"></span></div>
+          </div>
+        </div>
+        <div class="c3-sub" id="c3Sub" style="margin-top:6px"></div>
         <div class="c3-erro" id="c3Erro" hidden></div>
+        <div class="c3-unico"><div><small>Ou preço único (mesmo valor em qualquer pagamento, taxa já embutida)</small></div><b id="calcOutPrecoVenda">R$ 0,00</b></div>
         <div class="c3-kpis">
           <div><b id="calcOutCustoTotal">R$ 0,00</b><small>Custo por peça</small></div>
-          <div><b id="c3Lucro">R$ 0,00</b><small>Lucro líquido</small></div>
+          <div><b id="c3Lucro">R$ 0,00</b><small>Lucro no preço único</small></div>
           <div><b id="c3PrecoMin">R$ 0,00</b><small>Preço mínimo (lucro zero)</small></div>
           <div><b id="c3Taxas">R$ 0,00</b><small>Taxas + impostos</small></div>
         </div>
@@ -159,7 +190,7 @@ function c3MontarTela(){
           <div class="c3-mgtopo"><span>Simulação com taxa repassada</span></div>
           <small class="c3-dica" id="c3SimSub"></small>
           <div id="c3Sim"></div>
-          <div class="calc-note">O cliente paga a taxa e você recebe o mesmo valor em qualquer forma de pagamento (mesma conta do app do banco).</div>
+          <div class="calc-note">O cliente paga a taxa e você recebe o mesmo valor em qualquer forma de pagamento (arredondado para cima, você nunca recebe menos).</div>
         </div>
 
         <div class="c3-bloco">
@@ -177,6 +208,16 @@ function c3MontarTela(){
   css.textContent = `
     .c3-col{display:flex;flex-direction:column;gap:14px;min-width:0}
     .c3-main{border:1.5px solid var(--navy)}
+    .c3-h4{margin:18px 0 4px;font-size:13px;color:var(--navy)}
+    .c3-mesas{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+    .c3-mesa{display:grid;grid-template-columns:minmax(110px,1.4fr) minmax(80px,1fr) minmax(130px,1.3fr) minmax(80px,.9fr) auto;gap:8px;align-items:end;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--box-bg)}
+    .c3-mesa .field{margin:0}
+    .c3-mesa label{font-size:11.5px}
+    .c3-mesa-acoes{display:flex;gap:4px}
+    .c3-mesa-acoes button{padding:6px 8px;font-size:12px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap}
+    .c3-mesa-acoes button:disabled{opacity:.4;cursor:default}
+    .c3-mesas-pe{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:8px}
+    @media (max-width:700px){.c3-mesa{grid-template-columns:1fr 1fr}.c3-mesa .c3-m-nome{grid-column:1/-1}.c3-mesa-acoes{grid-column:1/-1}}
     .c3-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 14px}
     .c3-grid .field label{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
     .c3-tag{font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);background:var(--box-bg);padding:1px 6px;border-radius:4px}
@@ -197,6 +238,22 @@ function c3MontarTela(){
     .c3-preco{font-size:34px;font-weight:bold;color:var(--navy);line-height:1.1}
     .c3-sub{font-size:12.5px;color:var(--gray);margin-top:2px}
     .c3-erro{color:var(--red);font-size:13px;margin-top:6px}
+    .c3-cli{margin-top:12px;border:1.5px solid var(--navy);border-radius:10px;padding:10px}
+    .c3-cli-tit{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;color:var(--navy)}
+    .c3-cli-tit small{font-weight:normal;text-transform:none;letter-spacing:0;color:var(--gray)}
+    .c3-cli-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+    .c3-cli-grid>div{background:var(--box-bg);border-radius:8px;padding:8px}
+    .c3-cli-grid small{display:block;color:var(--gray);font-size:11px}
+    .c3-cli-grid b{display:block;font-size:17px;color:var(--text)}
+    .c3-cli-grid span{display:block;font-size:11px;color:var(--gray)}
+    .c3-unico{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px}
+    .c3-unico small{color:var(--gray);font-size:11.5px}
+    .c3-unico b{font-size:17px;white-space:nowrap}
+    .c3-cli-grid b{font-size:19px !important}
+    .c3-modo{display:flex;gap:4px}
+    .c3-modo button{padding:4px 9px;font-size:11.5px;font-weight:bold;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer;text-transform:none;letter-spacing:0}
+    .c3-modo button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+    @media (max-width:560px){.c3-cli-grid{grid-template-columns:1fr}.c3-cli-grid>div{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:8px}.c3-cli-grid>div b{grid-row:1/3;grid-column:2;text-align:right}}
     .c3-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
     .c3-kpis div{background:var(--box-bg);border-radius:8px;padding:8px 10px}
     .c3-kpis b{display:block;font-size:15px}
@@ -251,36 +308,37 @@ function c3SetMargem(v){ document.getElementById('c3Margem').value = String(v); 
 let c3Ultimo = null;
 
 function c3Calcular(){
-  const porMesa = Math.max(1, Math.floor(c3Num('c3PorMesa')) || 1);
   const pedido = Math.max(1, Math.round(c3Num('c3Pedido')) || 1);
-  const horas = c3Num('c3Horas') + c3Num('c3Min') / 60;
-  const gramas = c3Num('c3Gramas');
-
-  // custos da MESA inteira
-  const filamento = gramas / 1000 * c3Num('c3Fil');
-  const energia = c3Num('c3Watts') / 1000 * horas * c3Num('c3Kwh');
+  const fil = c3Num('c3Fil'), watts = c3Num('c3Watts'), kwh = c3Num('c3Kwh'), manutH = c3Num('c3Manut');
   const vida = c3Num('c3Vida');
   const deprecHora = vida > 0 ? c3Num('c3Maq') / vida : 0;
-  const desgaste = deprecHora * horas;
-  const manut = c3Num('c3Manut') * horas;
-  // falha: só se perde o que uma tentativa que falha consome (filamento, energia, desgaste, manutenção)
   const falha = Math.min(c3Num('c3Falha'), 90) / 100;
-  const perdas = (filamento + energia + desgaste + manut) * falha / (1 - falha);
-  const maoDeObra = c3Num('c3Trab') / 60 * c3Num('c3Hora');
   const hMes = c3Num('c3HorasMes');
-  const fixos = hMes > 0 ? c3Num('c3FixoMes') / hMes * horas : 0;
+  const fixoHora = hMes > 0 ? c3Num('c3FixoMes') / hMes : 0;
+  const valorHora = c3Num('c3Hora');
+  const trabMesa = c3Num('c3TrabMesa') / 60 * valorHora;   // manuseio de cada mesa
 
-  const mesa = {'Filamento': filamento, 'Energia': energia, 'Desgaste da impressora': desgaste, 'Manutenção': manut,
-                'Perdas por falha': perdas, 'Mão de obra': maoDeObra, 'Custos fixos': fixos};
+  // custos do CONJUNTO de mesas (totais do fatiador) ÷ produtos que saem dele
+  const g = c3Num('c3Gramas'), h = c3Num('c3Horas') + c3Num('c3Min') / 60;
+  const nMesas = Math.max(1, Math.round(c3Num('c3NMesas')) || 1);
+  const rende = Math.max(1, Math.floor(c3Num('c3Rende')) || 1);
+  const filamento = g / 1000 * fil, energia = watts / 1000 * h * kwh, desgaste = deprecHora * h, manut = manutH * h;
+  const perdas = (filamento + energia + desgaste + manut) * falha / (1 - falha);
+  const conj = {'Filamento': filamento, 'Energia': energia, 'Desgaste da impressora': desgaste, 'Manutenção': manut,
+                'Perdas por falha': perdas, 'Mão de obra': trabMesa * nMesas, 'Custos fixos': fixoHora * h};
   const itens = {};
-  Object.keys(mesa).forEach(k => { itens[k] = mesa[k] / porMesa; });
+  Object.keys(conj).forEach(k => { itens[k] = conj[k] / rende; });
+  const ciclos = Math.ceil(pedido / rende);            // quantas vezes imprimir o conjunto no pedido
+  const mesasPedido = ciclos * nMesas, horasPedido = ciclos * h, gramasPedido = ciclos * g, filPedido = ciclos * filamento;
+  const horasProd = h / rende, gramasProd = g / rende;
+  itens['Mão de obra'] += c3Num('c3Montagem') / 60 * valorHora;
   itens['Insumos e embalagem'] = c3Num('c3Insumos') + c3Num('c3Emb');
   const custo = Object.values(itens).reduce((a, b) => a + b, 0);
 
   const pTaxa = c3Num('c3Taxa') / 100, pImp = c3Num('c3Imp') / 100, pMg = c3Num('c3Margem') / 100;
   const fixa = c3Num('c3TaxaFixa');
   const pix = document.getElementById('c3Pix').checked;
-  const r = {porMesa, pedido, horas, gramas, itens, custo, deprecHora, pix};
+  const r = {pedido, nMesas, rende, horas: horasProd, gramas: gramasProd, itens, custo, deprecHora, pix};
   const div = 1 - pTaxa - pImp - pMg;
   if(div <= 0.0001){ r.erro = 'Taxas + imposto + margem somam 100% ou mais. Reduza a margem.'; return r; }
 
@@ -293,12 +351,11 @@ function c3Calcular(){
   r.lucro = r.preco - r.taxas - custo;
 
   // pedido
-  const mesas = Math.ceil(pedido / porMesa);
-  const dias = Math.ceil(mesas / Math.max(1, c3Num('c3MesasDia') || 1));
+  const dias = Math.ceil(mesasPedido / Math.max(1, c3Num('c3MesasDia') || 1));
   const total = r.preco * pedido;
   const taxasTot = pix ? total * pImp : total * (pTaxa + pImp) + fixa * pedido;
-  r.ped = {mesas, reserva: mesas * porMesa - pedido, horas: mesas * horas, kg: mesas * gramas / 1000,
-           filCusto: mesas * filamento, custo: custo * pedido, total, taxasTot,
+  r.ped = {mesas: mesasPedido, horas: horasPedido, kg: gramasPedido / 1000,
+           filCusto: filPedido, custo: custo * pedido, total, taxasTot,
            lucro: total - taxasTot - custo * pedido, sinal: total / 2, dias, prazo: dias * 2 + 5};
 
   // simulação com taxa repassada ao cliente: parte do preço SEM taxa de cartão
@@ -334,18 +391,26 @@ function calcularOrcamento3D(){
   c3Ultimo = r;
   document.getElementById('c3Deprec').value = c3R(r.deprecHora) + '/h';
 
+  const fh = x => Math.floor(x) + 'h' + String(Math.round((x % 1) * 60)).padStart(2, '0');
+  c3Set('c3MesasResumo', r.gramas || r.horas ?
+    (r.rende > 1 ? 'Cada produto: ' : 'O produto usa ') + r.gramas.toLocaleString('pt-BR', {maximumFractionDigits: 1}) + ' g e ' + fh(r.horas) +
+    ' de impressão' + (r.nMesas > 1 ? ', em ' + r.nMesas + ' mesas' : '') + '.' : 'Preencha o filamento e o tempo do fatiador.');
   const erro = document.getElementById('c3Erro');
   erro.hidden = !r.erro; erro.textContent = r.erro || '';
   c3Set('calcOutCustoTotal', c3R(r.custo));
 
   const mg = c3Num('c3Margem');
   c3Set('c3MgVal', c3Pct(mg));
+  const mLink = c3Modo() === 'link';
+  document.getElementById('c3ModoMaq').classList.toggle('on', !mLink);
+  document.getElementById('c3ModoLink').classList.toggle('on', mLink);
   const rng = document.getElementById('c3MgRange');
   if(document.activeElement !== rng) rng.value = Math.min(80, mg);
   document.querySelectorAll('#c3Chips button').forEach(b => b.classList.toggle('on', +b.dataset.v === mg));
 
   if(r.erro){
-    ['calcOutPrecoVenda', 'c3Lucro', 'c3PrecoMin', 'c3Taxas', 'calcOutTotalLote'].forEach(id => c3Set(id, '—'));
+    ['calcOutPrecoVenda', 'c3Lucro', 'c3PrecoMin', 'c3Taxas', 'calcOutTotalLote', 'c3CliPix', 'c3CliC1', 'c3CliC2'].forEach(id => c3Set(id, '—'));
+    ['c3CliPixT', 'c3CliC1T', 'c3CliC2T'].forEach(id => c3Set(id, ''));
     ['c3Sub', 'c3MgSub', 'c3PedSub', 'c3SimSub'].forEach(id => c3Set(id, ''));
     ['c3Ped', 'c3Sim', 'c3Check'].forEach(id => { document.getElementById(id).innerHTML = ''; });
     document.getElementById('c3PixExtra').hidden = true;
@@ -353,12 +418,36 @@ function calcularOrcamento3D(){
     const nome = document.getElementById('c3Nome').value.trim();
     const hf = v => v.toLocaleString('pt-BR', {maximumFractionDigits: 1});
     c3Set('calcOutPrecoVenda', c3R(r.preco));
-    c3Set('c3Sub', (nome ? nome + ' · ' : '') + (r.porMesa > 1 ? r.porMesa + ' por mesa · ' : '') + hf(r.horas) + ' h de impressão por mesa');
+    c3Set('c3Sub', (nome ? nome + ' · ' : '') + hf(r.gramas) + ' g e ' + hf(r.horas) + ' h de impressão por produto');
     c3Set('c3Lucro', c3R(r.lucro));
     c3Set('c3PrecoMin', isFinite(r.min) ? c3R(r.min) : '—');
     c3Set('c3Taxas', c3R(r.taxas));
     c3Set('c3MgSub', 'do preço final · equivale a ' + c3Pct(r.custo > 0 ? r.lucro / r.custo * 100 : 0) + ' acima do custo · ' + c3R(r.lucro) + ' por peça');
 
+    // preço para o cliente: Pix sem taxa; cartão/link com a taxa repassada, garantindo que você receba o valor calculado
+    if(r.sim){
+      const link = c3Modo() === 'link';
+      const u = r.sim.unit, ped = r.pedido;
+      const t1 = c3Num(link ? 'c3L1' : 'c3C1'), t2 = c3Num(link ? 'c3L2' : 'c3C2');
+      const nome = link ? 'Link' : 'Crédito';
+      const cobrar = c3Cobrar;
+      const a1 = cobrar(u, t1, 1), a2 = cobrar(u, t2, 2);
+      c3Set('c3CliPix', c3R(u));
+      c3Set('c3CliC1', c3R(a1.total));
+      c3Set('c3CliC2', '2x ' + c3R(a2.parc));
+      c3Set('c3CliC1L', nome + (link ? ' à vista' : ' 1x') + ' · ' + c3Pct(t1, 2).replace(',00%', '%'));
+      c3Set('c3CliC2L', nome + ' 2x · ' + c3Pct(t2, 2).replace(',00%', '%'));
+      if(ped > 1){
+        const L = u * ped, b1 = cobrar(L, t1, 1), b2 = cobrar(L, t2, 2);
+        c3Set('c3CliPixT', 'pedido: ' + c3R(L));
+        c3Set('c3CliC1T', 'pedido: ' + c3R(b1.total));
+        c3Set('c3CliC2T', 'pedido: ' + c3R(b2.total) + ' (2x ' + c3R(b2.parc) + ')');
+      } else {
+        c3Set('c3CliPixT', ''); c3Set('c3CliC1T', ''); c3Set('c3CliC2T', 'total ' + c3R(a2.total));
+      }
+      c3Set('c3CliSub', (link ? 'Valor para gerar o link' : 'Valor para digitar na maquininha ou no Tap to Pay (com "Repassar taxas" desligado)') +
+        (ped > 1 ? ' · por unidade e pedido de ' + ped : ' · por unidade') + ' · você recebe ' + c3R(ped > 1 ? u * ped : u) + ' em todos');
+    }
     const px = document.getElementById('c3PixExtra');
     px.hidden = !r.pix || r.extra <= 0;
     px.textContent = 'No Pix a taxa vira lucro: +' + c3R(r.extra) + ' por peça' +
@@ -371,7 +460,7 @@ function calcularOrcamento3D(){
     document.getElementById('c3Ped').innerHTML = c3Linhas([
       ['Lucro do pedido', c3R(p.lucro), 'destaque'],
       ['Sinal (50%)', c3R(p.sinal)],
-      ['Mesas a imprimir', p.mesas + (p.reserva > 0 ? ' (+' + p.reserva + ' de reserva)' : '')],
+      ['Mesas a imprimir', String(p.mesas)],
       ['Horas de impressão', hf(p.horas) + ' h'],
       ['Filamento', hf(p.kg) + ' kg · ' + c3R(p.filCusto)],
       ['Custo total do pedido', c3R(p.custo)],
@@ -405,11 +494,18 @@ function calcularOrcamento3D(){
       .concat([['Custo total por peça', c3R(r.custo), 'destaque']]));
 }
 
-// mesma conta do app do banco: total = valor ÷ (1 − taxa), arredondado no centavo; parcela = total ÷ nº de parcelas
-function c3Parcela(liq, t, x){
-  const total = Math.round(liq / (1 - Math.min(t, 90) / 100) * 100 + 1e-7) / 100;
-  return Math.round(total / x * 100 + 1e-7) / 100;
+// menor valor a cobrar para que (valor − taxa) nunca fique abaixo do que você quer receber
+// (vale para maquininha, Tap to Pay e link; parcelas sempre iguais)
+function c3Cobrar(liq, t, x){
+  const f = 1 - Math.min(t, 90) / 100;
+  let parc = Math.ceil(liq / f / x * 100 - 1e-7);                 // em centavos, parcelas iguais
+  while(Math.floor(parc * x * f + 1e-7) < Math.round(liq * 100)) parc++;
+  return {parc: parc / 100, total: parc * x / 100};
 }
+function c3Modo(){ try { return localStorage.getItem(C3_KEY + ':modo') === 'link' ? 'link' : 'maq'; } catch(e) { return 'maq'; } }
+function c3SetModo(m){ try { localStorage.setItem(C3_KEY + ':modo', m); } catch(e) {} calcularOrcamento3D(); }
+
+function c3Parcela(liq, t, x){ return c3Cobrar(liq, t, x).parc; }
 
 // simulador avulso: valor que quer receber -> quanto cobrar em cada forma de pagamento
 function c3SimularParcelado(){
@@ -432,10 +528,11 @@ function c3SimularParcelado(){
 
 function c3NovaPeca(){
   Object.keys(C3_PECA).forEach(id => { if(id !== 'c3Margem') document.getElementById(id).value = C3_PECA[id]; });
+
   document.getElementById('c3Pix').checked = false;
   calcularOrcamento3D();
   document.getElementById('c3Nome').focus();
-  c3Set('c3Msg', 'Campos da peça limpos. As configurações fixas continuam como estavam.');
+  c3Set('c3Msg', 'Campos do produto limpos. As configurações fixas continuam como estavam.');
 }
 
 function c3Resumo(){
@@ -443,7 +540,8 @@ function c3Resumo(){
   if(!r || r.erro) return '';
   const n = document.getElementById('c3Nome').value.trim() || 'Peça 3D';
   const p = r.ped;
-  let s = n + '\nPreço por unidade: ' + c3R(r.preco) + '\nPedido: ' + r.pedido + ' un = ' + c3R(p.total) +
+  let s = n + (r.sim ? '\nPix: ' + c3R(r.sim.unit) + ' · Crédito 1x: ' + c3R(c3Parcela(r.sim.unit, c3Num('c3C1'), 1)) +
+    ' · Crédito 2x: 2x ' + c3R(c3Parcela(r.sim.unit, c3Num('c3C2'), 2)) : '') + '\nPreço por unidade (taxa embutida): ' + c3R(r.preco) + '\nPedido: ' + r.pedido + ' un = ' + c3R(p.total) +
     '\nSinal (50%): ' + c3R(p.sinal) + '\nPrazo: ' + p.prazo + ' dias';
   if(r.sim){
     s += '\n\nFormas de pagamento:\n';
@@ -470,7 +568,7 @@ function usarPrecoNoProduto(){
   if(nome) document.getElementById('fpNome').value = nome;
   document.getElementById('fpPreco').value = fmtMoeda(r.preco);
   document.getElementById('fpPrecoCusto').value = fmtMoeda(r.custo);
-  const pesoPeca = r.gramas / r.porMesa;   // peso de UMA peça (o filamento é da mesa inteira)
+  const pesoPeca = r.gramas;   // peso de UM produto (soma das mesas ÷ produtos que cada uma serve)
   if(pesoPeca) document.getElementById('fpPeso').value = Math.round(pesoPeca * 10) / 10;
 }
 

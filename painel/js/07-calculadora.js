@@ -58,7 +58,7 @@ function c3MontarTela(){
   const C = c3Campo;
   sec.innerHTML = `
     <div class="panel-header"><h2 class="section-title">🧮 Calculadora 3D</h2></div>
-    <p class="modal-sub" style="margin-top:-8px;">Preencha "Este produto" e cadastre cada mesa que você imprime para fazê-lo. As configurações fixas ficam salvas neste navegador. O preço já cobre filamento, energia, desgaste, manutenção, falhas, seu tempo, custos do mês, taxas e o lucro.</p>
+    <p class="modal-sub" style="margin-top:-8px;">Preencha "Este produto" com os totais do fatiador (somando todas as mesas). As configurações fixas ficam salvas neste navegador. O preço já cobre filamento, energia, desgaste, manutenção, falhas, seu tempo, custos do mês, taxas e o lucro.</p>
     <div class="calc-wrap">
       <div class="c3-col">
         <div class="box c3-main">
@@ -156,6 +156,7 @@ function c3MontarTela(){
           <small class="c3-dica" id="c3CliSub" style="margin-top:4px"></small>
           <div class="c3-cli-grid">
             <div><small>Pix</small><b id="c3CliPix">—</b><span id="c3CliPixT"></span></div>
+            <div id="c3CliDebBox"><small id="c3CliDebL">Débito</small><b id="c3CliDeb">—</b><span id="c3CliDebT"></span></div>
             <div><small id="c3CliC1L">Crédito 1x</small><b id="c3CliC1">—</b><span id="c3CliC1T"></span></div>
             <div><small id="c3CliC2L">Crédito 2x</small><b id="c3CliC2">—</b><span id="c3CliC2T"></span></div>
           </div>
@@ -241,7 +242,8 @@ function c3MontarTela(){
     .c3-cli{margin-top:12px;border:1.5px solid var(--navy);border-radius:10px;padding:10px}
     .c3-cli-tit{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;color:var(--navy)}
     .c3-cli-tit small{font-weight:normal;text-transform:none;letter-spacing:0;color:var(--gray)}
-    .c3-cli-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+    .c3-cli-grid.link>div:first-child{grid-column:1/-1}
+    .c3-cli-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
     .c3-cli-grid>div{background:var(--box-bg);border-radius:8px;padding:8px}
     .c3-cli-grid small{display:block;color:var(--gray);font-size:11px}
     .c3-cli-grid b{display:block;font-size:17px;color:var(--text)}
@@ -409,8 +411,8 @@ function calcularOrcamento3D(){
   document.querySelectorAll('#c3Chips button').forEach(b => b.classList.toggle('on', +b.dataset.v === mg));
 
   if(r.erro){
-    ['calcOutPrecoVenda', 'c3Lucro', 'c3PrecoMin', 'c3Taxas', 'calcOutTotalLote', 'c3CliPix', 'c3CliC1', 'c3CliC2'].forEach(id => c3Set(id, '—'));
-    ['c3CliPixT', 'c3CliC1T', 'c3CliC2T'].forEach(id => c3Set(id, ''));
+    ['calcOutPrecoVenda', 'c3Lucro', 'c3PrecoMin', 'c3Taxas', 'calcOutTotalLote', 'c3CliPix', 'c3CliDeb', 'c3CliC1', 'c3CliC2'].forEach(id => c3Set(id, '—'));
+    ['c3CliPixT', 'c3CliDebT', 'c3CliC1T', 'c3CliC2T'].forEach(id => c3Set(id, ''));
     ['c3Sub', 'c3MgSub', 'c3PedSub', 'c3SimSub'].forEach(id => c3Set(id, ''));
     ['c3Ped', 'c3Sim', 'c3Check'].forEach(id => { document.getElementById(id).innerHTML = ''; });
     document.getElementById('c3PixExtra').hidden = true;
@@ -433,6 +435,12 @@ function calcularOrcamento3D(){
       const cobrar = c3Cobrar;
       const a1 = cobrar(u, t1, 1), a2 = cobrar(u, t2, 2);
       c3Set('c3CliPix', c3R(u));
+      const tD = c3Num('c3Deb');
+      document.getElementById('c3CliDebBox').hidden = link;   // link de pagamento não tem débito
+      document.querySelector('.c3-cli-grid').classList.toggle('link', link);
+      c3Set('c3CliDeb', c3R(cobrar(u, tD, 1).total));
+      c3Set('c3CliDebL', 'Débito · ' + c3Pct(tD, 2).replace(',00%', '%'));
+      c3Set('c3CliDebT', ped > 1 ? 'pedido: ' + c3R(cobrar(u * ped, tD, 1).total) : '');
       c3Set('c3CliC1', c3R(a1.total));
       c3Set('c3CliC2', '2x ' + c3R(a2.parc));
       c3Set('c3CliC1L', nome + (link ? ' à vista' : ' 1x') + ' · ' + c3Pct(t1, 2).replace(',00%', '%'));
@@ -540,7 +548,7 @@ function c3Resumo(){
   if(!r || r.erro) return '';
   const n = document.getElementById('c3Nome').value.trim() || 'Peça 3D';
   const p = r.ped;
-  let s = n + (r.sim ? '\nPix: ' + c3R(r.sim.unit) + ' · Crédito 1x: ' + c3R(c3Parcela(r.sim.unit, c3Num('c3C1'), 1)) +
+  let s = n + (r.sim ? '\nPix: ' + c3R(r.sim.unit) + ' · Débito: ' + c3R(c3Cobrar(r.sim.unit, c3Num('c3Deb'), 1).total) + ' · Crédito 1x: ' + c3R(c3Parcela(r.sim.unit, c3Num('c3C1'), 1)) +
     ' · Crédito 2x: 2x ' + c3R(c3Parcela(r.sim.unit, c3Num('c3C2'), 2)) : '') + '\nPreço por unidade (taxa embutida): ' + c3R(r.preco) + '\nPedido: ' + r.pedido + ' un = ' + c3R(p.total) +
     '\nSinal (50%): ' + c3R(p.sinal) + '\nPrazo: ' + p.prazo + ' dias';
   if(r.sim){

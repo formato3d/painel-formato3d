@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formato 3D — PNG para Chaveiro em Camadas</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#2a2f3a;--tx:#e8eaf0;--mut:#9aa1b0;--ac:#ff7a1a;--ok:#2ecc71}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+header b{color:var(--ac)}header span{color:var(--mut);font-size:13px}
+main{display:grid;grid-template-columns:410px 1fr;gap:16px;padding:16px;max-width:1400px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+h3{margin:0 0 10px;font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;margin:7px 0}
+input[type=number],select,input[type=text]{background:#0d0f13;color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:5px 7px;width:110px;font-size:13px}
+input[type=text]{width:180px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center;color:var(--mut);cursor:pointer}
+.drop.over{border-color:var(--ac);color:var(--tx)}
+.btn{background:var(--ac);color:#111;border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:14px}
+.btn.sec{background:#2a2f3a;color:var(--tx)}.btn:disabled{opacity:.4;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.pal{display:flex;align-items:center;gap:8px;padding:6px;border:1px solid var(--line);border-radius:8px;margin:6px 0;font-size:13px}
+.pal input[type=color]{width:34px;height:28px;border:0;background:none;padding:0}
+.pal .pct{color:var(--mut);width:46px}
+.pal .alt{width:52px;padding:5px 4px}
+.pal .orig{width:14px;height:14px;border-radius:3px;border:1px solid #555;flex:none}
+.pal .trocar{width:34px;height:28px;border-radius:6px;border:2px solid #fff3;cursor:pointer;flex:none}
+.pal .trocar:hover{border-color:var(--ac)}
+.pop{position:absolute;z-index:50;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;width:240px;box-shadow:0 10px 30px #0008}
+.pop .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}.pop .grid button{height:28px;border-radius:6px;border:1px solid #fff3;cursor:pointer}
+.pop .grid button:hover{outline:2px solid var(--ac)}
+.pal select{width:78px;padding:5px 3px}.pal{gap:6px!important}.pal .mv{background:#2a2f3a;color:var(--tx);border:0;border-radius:5px;width:26px;height:26px;cursor:pointer}
+.views{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.views{grid-template-columns:1fr}}
+canvas{width:100%;height:auto;background:repeating-conic-gradient(#222 0 25%,#1a1a1a 0 50%) 50%/20px 20px;border-radius:8px;display:block}
+.steps{font-size:14px;line-height:1.7}.steps .sw{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid #555;vertical-align:-1px;margin-right:4px}
+.mut{color:var(--mut);font-size:12px}.status{font-size:13px;color:var(--mut);margin-top:8px}
+.desc{background:#0d0f13;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap}
+.tabs{display:flex;gap:6px;margin-left:auto}.tab{background:#2a2f3a;color:var(--mut);border:0;border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer}.tab.on{background:var(--ac);color:#111;font-weight:700}
+#t1{display:grid;grid-template-columns:340px 1fr;gap:16px;padding:16px;max-width:1400px;margin:auto}
+@media(max-width:900px){#t1{grid-template-columns:1fr}}
+#cvBg{cursor:crosshair;max-height:72vh;object-fit:contain}
+input[type=range]{accent-color:var(--ac)}
+.zwrap{position:relative;overflow:hidden;border-radius:8px;aspect-ratio:1/1;background:repeating-conic-gradient(#222 0 25%,#1a1a1a 0 50%) 50%/20px 20px;touch-action:none}
+.zwrap canvas{position:absolute;left:0;top:0;width:auto;height:auto;max-width:none;background:none;border-radius:0;transform-origin:0 0}
+.zbar{position:absolute;right:6px;top:6px;display:flex;gap:4px;z-index:2}
+.zbar button{width:28px;height:28px;border-radius:6px;border:1px solid #fff2;background:#000a;color:#fff;cursor:pointer;font-size:15px}
+.zwrap.big{position:fixed;inset:12px;z-index:40;aspect-ratio:auto;border:1px solid var(--line)}
+.zinfo{position:absolute;left:8px;bottom:6px;font-size:11px;color:#fffa;background:#0008;padding:2px 6px;border-radius:4px;pointer-events:none}
+.btn.on{background:var(--ac);color:#111}
+</style>
+</head>
+<body>
+<header><div><b>Formato 3D</b> · PNG → Chaveiro em camadas</div><span>gera 3MF pronto para o Bambu Studio (com pausas/troca de cor)</span><div class="tabs"><button class="tab on" id="tab1">1. Preparar imagem</button><button class="tab" id="tab2">2. Chaveiro</button></div></header>
+<div id="t1">
+<section>
+  <div class="card">
+    <h3>1. Imagem (JPG, JPEG, PNG, WEBP)</h3>
+    <div class="drop" id="drop1">Arraste a imagem aqui ou <u>clique para escolher</u><br><span class="mut">o fundo será removido e vira PNG transparente</span></div>
+    <input type="file" id="file1" accept="image/*" hidden>
+  </div>
+  <div class="card">
+    <h3>Remover fundo</h3>
+    <label>Modo <select id="bgMode" style="width:170px"><option value="borda">Fundo ligado às bordas</option><option value="global">Essa cor em toda a imagem</option></select></label>
+    <label>Tolerância <input type="range" id="tol" min="0" max="160" value="45" style="width:150px"><span id="tolV" class="mut">45</span></label>
+    <label>Encolher borda (tira halo) <input type="range" id="shrink" min="0" max="4" value="1" style="width:150px"><span id="shrinkV" class="mut">1 px</span></label>
+    <label>Suavizar contorno <input type="checkbox" id="feather" checked></label>
+    <label>Remover fundo automático (cantos) <input type="checkbox" id="autoBg" checked></label>
+    <div class="mut">Clique na imagem para remover mais uma cor/área (ex.: o miolo de uma letra). Use o modo “Essa cor em toda a imagem” para tirar a mesma cor de todos os lugares.</div>
+    <div class="row" style="margin-top:10px"><button class="btn sec" id="undo1">Desfazer clique</button><button class="btn sec" id="reset1">Recomeçar</button></div>
+  </div>
+  <div class="card row">
+    <button class="btn" id="go2" disabled>Continuar para o chaveiro →</button>
+    <button class="btn sec" id="dlPng" disabled>Baixar PNG</button>
+  </div>
+  <div class="mut" style="padding:0 4px">Já tem PNG transparente? Pode ir direto na aba <b>2. Chaveiro</b>.</div>
+</section>
+<section>
+  <div class="card">
+    <h3>Resultado (fundo xadrez = transparente)</h3>
+    <canvas id="cvBg" width="10" height="10"></canvas>
+    <div class="status" id="st1">Carregue uma imagem.</div>
+  </div>
+</section>
+</div>
+<main id="t2" style="display:none">
+<section>
+  <div class="card">
+    <div class="drop" id="drop">Arraste o PNG aqui ou <u>clique para escolher</u><br><span class="mut">ideal: PNG com fundo transparente</span></div>
+    <input type="file" id="file" accept="image/png,image/*" hidden>
+    <label>Nome do arquivo <input type="text" id="nome" value="Chaveiro"></label>
+  </div>
+  <div class="card">
+    <h3>Cores da imagem</h3>
+    <label>Quantidade de cores <select id="k"><option value="0">Automático (todas)</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option></select></label>
+    <label>Remover fundo pela cor dos cantos <input type="checkbox" id="rmbg" checked></label>
+    <div id="pal"><div class="mut">Carregue uma imagem.</div></div>
+    <div class="mut">Clique no quadrado colorido para <b>trocar a cor</b> (lista de filamentos ou personalizada). A cor da base/borda é separada (em Medidas). “Relevo” = imprime com a cor escolhida, em cima da base. “Plano” = não sobe; ali aparece a cor da base. A lista vai de cima (mais alto) para baixo (▲▼).</div>
+  </div>
+  <div class="card">
+    <h3>Medidas (mm)</h3>
+    <label>Tamanho (maior lado do desenho) <input type="number" id="size" value="52" step="1" min="10"></label>
+    <label>Borda em volta <input type="number" id="border" value="2.5" step="0.5" min="0"></label>
+    <label>Cor da base / borda <input type="color" id="baseColor" value="#000000"></label>
+    <label>Altura da camada <input type="number" id="layer" value="0.2" step="0.04" min="0.08"></label>
+    <label>Espessura da base <input type="number" id="baseH" value="2.0" step="0.2" min="0.4"></label>
+  </div>
+  <div class="card">
+    <h3>Modo de impressão</h3>
+    <label>Modo <select id="mode" style="width:170px">
+      <option value="sem">Camadas — SEM AMS (pausas)</option>
+      <option value="ams">Camadas — COM AMS (troca auto.)</option>
+      <option value="partes">Partes por cor (AMS)</option>
+      <option value="encaixe">Encaixe — peças separadas</option></select></label>
+    <div id="optFlush"><label>Borda na mesma altura das cores <input type="checkbox" id="flush" checked></label></div>
+    <div id="optEnc" hidden><label>Folga do encaixe (mm) <input type="number" id="clear" value="0.15" step="0.05" min="0"></label>
+      <label>Exportar uma mesa por cor <input type="checkbox" id="porMesa" checked></label>
+      <div class="mut">Base com rebaixos + cada cor como peça separada, tudo na mesma altura depois de encaixado.</div></div>
+    <button class="btn" id="nivelar" style="width:100%;margin:8px 0">Altura padrão (nivelar cores com a borda)</button>
+    <div class="mut" id="nivNote"></div>
+    <label>Altura total desejada <input type="number" id="totalH" value="3.0" step="0.2"></label>
+    <button class="btn sec" id="distrib" style="width:100%">Distribuir alturas das cores igualmente</button>
+    <div class="mut" style="margin-top:6px">A altura de cada cor fica ao lado dela, em “Cores da imagem”.</div>
+  </div>
+  <div class="card">
+    <h3>Argola</h3>
+    <label>Posição <select id="ring"><option value="top">Topo</option><option value="top-left">Topo esquerda</option><option value="top-right">Topo direita</option><option value="left">Esquerda</option><option value="right">Direita</option><option value="custom">Personalizada (clique na imagem)</option><option value="none">Sem argola</option></select></label>
+    <button class="btn sec" id="posArgola" style="width:100%;margin:4px 0">📍 Posicionar argola na imagem</button>
+    <div class="mut" id="argNote">Clique no botão (ou no 📍 em cima das imagens) e depois no lugar onde quer a argola — dentro ou fora do desenho.</div>
+    <label>Diâmetro externo <input type="number" id="ringD" value="8" step="0.5"></label>
+    <label>Diâmetro do furo <input type="number" id="holeD" value="4" step="0.5"></label>
+    <label>Ignorar detalhes menores que (mm²) <input type="number" id="minArea" value="0.1" step="0.1" min="0"></label>
+  </div>
+</section>
+<section>
+  <div class="card">
+    <div class="views">
+      <div><h3>Imagem (cores escolhidas) · clique para trocar</h3><div class="zwrap" id="zwIn"><canvas id="cvIn" width="10" height="10"></canvas><div class="zbar"><button data-z="In" data-a="in" title="Aproximar">+</button><button data-z="In" data-a="out" title="Afastar">−</button><button data-z="In" data-a="fit" title="Ajustar">⤢</button><button data-z="In" data-a="big" title="Tela cheia">⛶</button><button class="pinArg" title="Posicionar a argola: clique aqui e depois no lugar da imagem">📍</button></div></div></div>
+      <div><h3>Resultado (vista de cima) · clique para trocar</h3><div class="zwrap" id="zwOut"><canvas id="cvOut" width="10" height="10"></canvas><div class="zbar"><button data-z="Out" data-a="in" title="Aproximar">+</button><button data-z="Out" data-a="out" title="Afastar">−</button><button data-z="Out" data-a="fit" title="Ajustar">⤢</button><button data-z="Out" data-a="big" title="Tela cheia">⛶</button><button class="pinArg" title="Posicionar a argola: clique aqui e depois no lugar da imagem">📍</button></div></div></div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+  <div class="card">
+    <h3>Vista 3D</h3>
+    <canvas id="cv3d" style="height:420px;background:#171a21;cursor:grab;touch-action:none"></canvas>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <button class="btn sec" id="bExp">Vista explodida</button>
+      <button class="btn sec" id="bTop">Vista de cima</button>
+      <button class="btn sec" id="bIso">Vista 3D</button>
+      <label style="flex:1;margin:0">Separação <input type="range" id="exp" min="0" max="20" step="0.5" value="0" style="flex:1"></label>
+    </div>
+    <div class="mut">Arraste para girar · roda do mouse para zoom. Na vista explodida cada cor aparece separada na ordem em que é impressa (base embaixo).</div>
+  </div>
+  <div class="card">
+    <h3>Ordem das cores / pausas</h3>
+    <div id="steps" class="steps mut">—</div>
+    <div style="margin-top:10px" class="mut">Texto para a descrição do modelo:</div>
+    <div class="desc" id="desc">—</div>
+  </div>
+  <div class="card row">
+    <button class="btn" id="b3mf" disabled>Baixar 3MF (Bambu Studio)</button>
+    <button class="btn sec" id="bstl" disabled>Baixar STL</button>
+    <button class="btn sec" id="bcopy" disabled>Copiar descrição</button>
+  </div>
+</section>
+</main>
+<script>!function(e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e():"function"==typeof define&&define.amd?define([],e):("undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof self?self:this).earcut=e()}(function(){return function r(x,i,u){function f(n,e){if(!i[n]){if(!x[n]){var t="function"==typeof require&&require;if(!e&&t)return t(n,!0);if(o)return o(n,!0);throw(e=new Error("Cannot find module '"+n+"'")).code="MODULE_NOT_FOUND",e}t=i[n]={exports:{}},x[n][0].call(t.exports,function(e){return f(x[n][1][e]||e)},t,t.exports,r,x,i,u)}return i[n].exports}for(var o="function"==typeof require&&require,e=0;e<u.length;e++)f(u[e]);return f}({1:[function(e,n,t){"use strict";function r(e,n,t){t=t||2;var r,x,i,u,f,o=n&&n.length,v=o?n[0]*t:e.length,p=s(e,0,v,t,!0),y=[];if(p&&p.next!==p.prev){if(o&&(p=function(e,n,t,r){var x,i,u,f,o=[];for(x=0,i=n.length;x<i;x++)f=n[x]*r,u=x<i-1?n[x+1]*r:e.length,(f=s(e,f,u,r,!1))===f.next&&(f.steiner=!0),o.push(function(e){var n=e,t=e;for(;(n.x<t.x||n.x===t.x&&n.y<t.y)&&(t=n),n=n.next,n!==e;);return t}(f));for(o.sort(c),x=0;x<o.length;x++)t=function(e,n){var t=function(e,n){var t,r=n,x=e.x,i=e.y,u=-1/0;do{if(i<=r.y&&i>=r.next.y&&r.next.y!==r.y){var f=r.x+(i-r.y)*(r.next.x-r.x)/(r.next.y-r.y);if(f<=x&&u<f&&(u=f,t=r.x<r.next.x?r:r.next,f===x))return t}}while(r=r.next,r!==n);if(!t)return null;var o,v=t,p=t.x,y=t.y,a=1/0;r=t;for(;x>=r.x&&r.x>=p&&x!==r.x&&D(i<y?x:u,i,p,y,i<y?u:x,i,r.x,r.y)&&(o=Math.abs(i-r.y)/(x-r.x),_(r,e)&&(o<a||o===a&&(r.x>t.x||r.x===t.x&&function(e,n){return E(e.prev,e,n.prev)<0&&E(n.next,e,e.next)<0}(t,r)))&&(t=r,a=o)),r=r.next,r!==v;);return t}(e,n);if(!t)return n;n=j(t,e);return q(n,n.next),q(t,t.next)}(o[x],t);return t}(e,n,p,t)),e.length>80*t){for(var a=r=e[0],l=x=e[1],h=t;h<v;h+=t)(i=e[h])<a&&(a=i),(u=e[h+1])<l&&(l=u),r<i&&(r=i),x<u&&(x=u);f=0!==(f=Math.max(r-a,x-l))?32767/f:0}O(p,y,t,a,l,f,0)}return y}function s(e,n,t,r,x){var i,u;if(x===0<d(e,n,t,r))for(i=n;i<t;i+=r)u=f(i,e[i],e[i+1],u);else for(i=t-r;n<=i;i-=r)u=f(i,e[i],e[i+1],u);return u&&N(u,u.next)&&(C(u),u=u.next),u}function q(e,n){if(!e)return e;n=n||e;var t,r=e;do{if(t=!1,r.steiner||!N(r,r.next)&&0!==E(r.prev,r,r.next))r=r.next;else{if(C(r),(r=n=r.prev)===r.next)break;t=!0}}while(t||r!==n);return n}function O(e,n,t,r,x,i,u){if(e){if(!u&&i){for(var f=e,o=r,v=x,p=i,y=f;0===y.z&&(y.z=k(y.x,y.y,o,v,p)),y.prevZ=y.prev,y.nextZ=y.next,(y=y.next)!==f;);y.prevZ.nextZ=null,y.prevZ=null;var a,l,h,s,c,d,Z,g,w=y,M=1;do{for(l=w,c=w=null,d=0;l;){for(d++,h=l,a=Z=0;a<M&&(Z++,h=h.nextZ);a++);for(g=M;0<Z||0<g&&h;)0!==Z&&(0===g||!h||l.z<=h.z)?(l=(s=l).nextZ,Z--):(h=(s=h).nextZ,g--),c?c.nextZ=s:w=s,s.prevZ=c,c=s;l=h}}while(c.nextZ=null,M*=2,1<d)}for(var b,m,z=e;e.prev!==e.next;)if(b=e.prev,m=e.next,i?function(e,n,t,r){var x=e.prev,i=e,u=e.next;if(0<=E(x,i,u))return;var f=x.x,o=i.x,v=u.x,p=x.y,y=i.y,a=u.y,l=f<o?f<v?f:v:o<v?o:v,h=p<y?p<a?p:a:y<a?y:a,s=o<f?v<f?f:v:v<o?o:v,c=y<p?a<p?p:a:a<y?y:a,d=k(l,h,n,t,r),Z=k(s,c,n,t,r),g=e.prevZ,w=e.nextZ;for(;g&&g.z>=d&&w&&w.z<=Z;){if(g.x>=l&&g.x<=s&&g.y>=h&&g.y<=c&&g!==x&&g!==u&&D(f,p,o,y,v,a,g.x,g.y)&&0<=E(g.prev,g,g.next))return;if(g=g.prevZ,w.x>=l&&w.x<=s&&w.y>=h&&w.y<=c&&w!==x&&w!==u&&D(f,p,o,y,v,a,w.x,w.y)&&0<=E(w.prev,w,w.next))return;w=w.nextZ}for(;g&&g.z>=d;){if(g.x>=l&&g.x<=s&&g.y>=h&&g.y<=c&&g!==x&&g!==u&&D(f,p,o,y,v,a,g.x,g.y)&&0<=E(g.prev,g,g.next))return;g=g.prevZ}for(;w&&w.z<=Z;){if(w.x>=l&&w.x<=s&&w.y>=h&&w.y<=c&&w!==x&&w!==u&&D(f,p,o,y,v,a,w.x,w.y)&&0<=E(w.prev,w,w.next))return;w=w.nextZ}return 1}(e,r,x,i):function(e){var n=e.prev,t=e,e=e.next;if(0<=E(n,t,e))return;var r=n.x,x=t.x,i=e.x,u=n.y,f=t.y,o=e.y,v=r<x?r<i?r:i:x<i?x:i,p=u<f?u<o?u:o:f<o?f:o,y=x<r?i<r?r:i:i<x?x:i,a=f<u?o<u?u:o:o<f?f:o,l=e.next;for(;l!==n;){if(l.x>=v&&l.x<=y&&l.y>=p&&l.y<=a&&D(r,u,x,f,i,o,l.x,l.y)&&0<=E(l.prev,l,l.next))return;l=l.next}return 1}(e))n.push(b.i/t|0),n.push(e.i/t|0),n.push(m.i/t|0),C(e),e=m.next,z=m.next;else if((e=m)===z){u?1===u?O(e=function(e,n,t){var r=e;do{var x=r.prev,i=r.next.next}while(!N(x,i)&&U(x,r,r.next,i)&&_(x,i)&&_(i,x)&&(n.push(x.i/t|0),n.push(r.i/t|0),n.push(i.i/t|0),C(r),C(r.next),r=e=i),r=r.next,r!==e);return q(r)}(q(e),n,t),n,t,r,x,i,2):2===u&&function(e,n,t,r,x,i){var u=e;do{for(var f,o=u.next.next;o!==u.prev;){if(u.i!==o.i&&function(e,n){return e.next.i!==n.i&&e.prev.i!==n.i&&!function(e,n){var t=e;do{if(t.i!==e.i&&t.next.i!==e.i&&t.i!==n.i&&t.next.i!==n.i&&U(t,t.next,e,n))return 1}while(t=t.next,t!==e);return}(e,n)&&(_(e,n)&&_(n,e)&&function(e,n){var t=e,r=!1,x=(e.x+n.x)/2,i=(e.y+n.y)/2;for(;t.y>i!=t.next.y>i&&t.next.y!==t.y&&x<(t.next.x-t.x)*(i-t.y)/(t.next.y-t.y)+t.x&&(r=!r),t=t.next,t!==e;);return r}(e,n)&&(E(e.prev,e,n.prev)||E(e,n.prev,n))||N(e,n)&&0<E(e.prev,e,e.next)&&0<E(n.prev,n,n.next))}(u,o))return f=j(u,o),u=q(u,u.next),f=q(f,f.next),O(u,n,t,r,x,i,0),O(f,n,t,r,x,i,0);o=o.next}}while(u=u.next,u!==e)}(e,n,t,r,x,i):O(q(e),n,t,r,x,i,1);break}}}function c(e,n){return e.x-n.x}function k(e,n,t,r,x){return(e=1431655765&((e=858993459&((e=252645135&((e=16711935&((e=(e-t)*x|0)|e<<8))|e<<4))|e<<2))|e<<1))|(n=1431655765&((n=858993459&((n=252645135&((n=16711935&((n=(n-r)*x|0)|n<<8))|n<<4))|n<<2))|n<<1))<<1}function D(e,n,t,r,x,i,u,f){return(e-u)*(i-f)<=(x-u)*(n-f)&&(t-u)*(n-f)<=(e-u)*(r-f)&&(x-u)*(r-f)<=(t-u)*(i-f)}function E(e,n,t){return(n.y-e.y)*(t.x-n.x)-(n.x-e.x)*(t.y-n.y)}function N(e,n){return e.x===n.x&&e.y===n.y}function U(e,n,t,r){var x=v(E(e,n,t)),i=v(E(e,n,r)),u=v(E(t,r,e)),f=v(E(t,r,n));return x!==i&&u!==f||(0===x&&o(e,t,n)||(0===i&&o(e,r,n)||(0===u&&o(t,e,r)||!(0!==f||!o(t,n,r)))))}function o(e,n,t){return n.x<=Math.max(e.x,t.x)&&n.x>=Math.min(e.x,t.x)&&n.y<=Math.max(e.y,t.y)&&n.y>=Math.min(e.y,t.y)}function v(e){return 0<e?1:e<0?-1:0}function _(e,n){return E(e.prev,e,e.next)<0?0<=E(e,n,e.next)&&0<=E(e,e.prev,n):E(e,n,e.prev)<0||E(e,e.next,n)<0}function j(e,n){var t=new u(e.i,e.x,e.y),r=new u(n.i,n.x,n.y),x=e.next,i=n.prev;return(e.next=n).prev=e,(t.next=x).prev=t,(r.next=t).prev=r,(i.next=r).prev=i,r}function f(e,n,t,r){e=new u(e,n,t);return r?(e.next=r.next,(e.prev=r).next.prev=e,r.next=e):(e.prev=e).next=e,e}function C(e){e.next.prev=e.prev,e.prev.next=e.next,e.prevZ&&(e.prevZ.nextZ=e.nextZ),e.nextZ&&(e.nextZ.prevZ=e.prevZ)}function u(e,n,t){this.i=e,this.x=n,this.y=t,this.prev=null,this.next=null,this.z=0,this.prevZ=null,this.nextZ=null,this.steiner=!1}function d(e,n,t,r){for(var x=0,i=n,u=t-r;i<t;i+=r)x+=(e[u]-e[i])*(e[i+1]+e[u+1]),u=i;return x}n.exports=r,(n.exports.default=r).deviation=function(e,n,t,r){var x=n&&n.length,i=x?n[0]*t:e.length,u=Math.abs(d(e,0,i,t));if(x)for(var f=0,o=n.length;f<o;f++){var v=n[f]*t,p=f<o-1?n[f+1]*t:e.length;u-=Math.abs(d(e,v,p,t))}for(var y=0,f=0;f<r.length;f+=3){var a=r[f]*t,l=r[f+1]*t,h=r[f+2]*t;y+=Math.abs((e[a]-e[h])*(e[1+l]-e[1+a])-(e[a]-e[l])*(e[1+h]-e[1+a]))}return 0===u&&0===y?0:Math.abs((y-u)/u)},r.flatten=function(e){for(var n=e[0][0].length,t={vertices:[],holes:[],dimensions:n},r=0,x=0;x<e.length;x++){for(var i=0;i<e[x].length;i++)for(var u=0;u<n;u++)t.vertices.push(e[x][i][u]);0<x&&(r+=e[x-1].length,t.holes.push(r))}return t}},{}]},{},[1])(1)});
+</script>
+<script>window.BAMBU_TPL={"accel_to_decel_enable":"1","accel_to_decel_factor":"25%","activate_air_filtration":["0","0"],"additional_cooling_fan_speed":["70","70"],"additional_fan_full_speed_layer":["0","0"],"alternate_extra_wall":"0","ams_filament_load_time_ams":"0","ams_filament_load_time_ams_lite":"0","ams_filament_load_time_n3f_s":"0","ams_filament_unload_time_ams":"0","ams_filament_unload_time_ams_lite":"0","ams_filament_unload_time_n3f_s":"0","ams_nozzle_idx":["0"],"apply_scarf_seam_on_circles":"1","aux_fan_independent_control":"0","aux_fan_standard_side":"right","auxiliary_fan":"0","avoid_crossing_wall_includes_support":"0","bed_custom_model":"","bed_custom_texture":"","bed_exclude_area":[],"bed_heat_soak_area":[],"bed_temperature_formula":"by_first_filament","before_layer_change_gcode":"","best_object_pos":"0.5,0.5","bottom_color_penetration_layers":"3","bottom_shell_layers":"3","bottom_shell_thickness":"0","bottom_surface_density":"100%","bottom_surface_pattern":"monotonicline","bridge_angle":"0","bridge_flow":"0.8","bridge_no_support":"0","bridge_speed":["25"],"brim_object_gap":"0.1","brim_type":"auto_brim","brim_width":"5","chamber_temperatures":["0","0"],"change_filament_gcode":";===== A1 20251031 =======================\nM1007 S0 ; turn off mass estimation\nG392 S0\nM620 S[next_extruder]A\nM204 S9000\nG1 Z{max_layer_z + 3.0} F1200\n\nM400\nM106 P1 S0\nM106 P2 S0\n{if old_filament_temp > 142 && next_extruder < 255}\nM104 S[old_filament_temp]\n{endif}\n\nG1 X267 F18000\n\n{if long_retractions_when_cut[previous_extruder]}\nM620.11 S1 I[previous_extruder] E-{retraction_distances_when_cut[previous_extruder]} F1200\n{else}\nM620.11 S0\n{endif}\nM400\n\nM620.1 E F{flush_volumetric_speeds[previous_extruder]/2.4053*60} T{flush_temperatures[previous_extruder]}\nM620.10 A0 F{flush_volumetric_speeds[previous_extruder]/2.4053*60}\nT[next_extruder]\nM620.1 E F{flush_volumetric_speeds[next_extruder]/2.4053*60} T{flush_temperatures[next_extruder]}\nM620.10 A1 F{flush_volumetric_speeds[next_extruder]/2.4053*60} L[flush_length] H[nozzle_diameter] T{flush_temperatures[next_extruder]}\n\nG1 Y128 F9000\n\n{if next_extruder < 255}\n\n{if long_retractions_when_cut[previous_extruder]}\nM620.11 S1 I[previous_extruder] E{retraction_distances_when_cut[previous_extruder]} F{flush_volumetric_speeds[previous_extruder]/2.4053*60}\nM628 S1\nG92 E0\nG1 E{retraction_distances_when_cut[previous_extruder]} F{flush_volumetric_speeds[previous_extruder]/2.4053*60}\nM400\nM629 S1\n{else}\nM620.11 S0\n{endif}\n\nM400\nG92 E0\nM628 S0\n\n{if flush_length_1 > 1}\n; FLUSH_START\n; always use highest temperature to flush\nM400\nM1002 set_filament_type:UNKNOWN\nM109 S[flush_temperatures[next_extruder]]\nM106 P1 S60\n{if flush_length_1 > 23.7}\nG1 E23.7 F{flush_volumetric_speeds[previous_extruder]/2.4053*60} ; do not need pulsatile flushing for start part\nG1 E{(flush_length_1 - 23.7) * 0.02} F50\nG1 E{(flush_length_1 - 23.7) * 0.23} F{flush_volumetric_speeds[previous_extruder]/2.4053*60}\nG1 E{(flush_length_1 - 23.7) * 0.02} F50\nG1 E{(flush_length_1 - 23.7) * 0.23} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{(flush_length_1 - 23.7) * 0.02} F50\nG1 E{(flush_length_1 - 23.7) * 0.23} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{(flush_length_1 - 23.7) * 0.02} F50\nG1 E{(flush_length_1 - 23.7) * 0.23} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\n{else}\nG1 E{flush_length_1} F{flush_volumetric_speeds[previous_extruder]/2.4053*60}\n{endif}\n; FLUSH_END\nG1 E-[old_retract_length_toolchange] F1800\nG1 E[old_retract_length_toolchange] F300\nM400\nM1002 set_filament_type:{filament_type[next_extruder]}\n{endif}\n\n{if flush_length_1 > 45 && flush_length_2 > 1}\n; WIPE\nM400\nM106 P1 S178\nM400 S3\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nM400\nM106 P1 S0\n{endif}\n\n{if flush_length_2 > 1}\nM106 P1 S60\n; FLUSH_START\nG1 E{flush_length_2 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_2 * 0.02} F50\nG1 E{flush_length_2 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_2 * 0.02} F50\nG1 E{flush_length_2 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_2 * 0.02} F50\nG1 E{flush_length_2 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_2 * 0.02} F50\nG1 E{flush_length_2 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_2 * 0.02} F50\n; FLUSH_END\nG1 E-[new_retract_length_toolchange] F1800\nG1 E[new_retract_length_toolchange] F300\n{endif}\n\n{if flush_length_2 > 45 && flush_length_3 > 1}\n; WIPE\nM400\nM106 P1 S178\nM400 S3\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nM400\nM106 P1 S0\n{endif}\n\n{if flush_length_3 > 1}\nM106 P1 S60\n; FLUSH_START\nG1 E{flush_length_3 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_3 * 0.02} F50\nG1 E{flush_length_3 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_3 * 0.02} F50\nG1 E{flush_length_3 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_3 * 0.02} F50\nG1 E{flush_length_3 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_3 * 0.02} F50\nG1 E{flush_length_3 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_3 * 0.02} F50\n; FLUSH_END\nG1 E-[new_retract_length_toolchange] F1800\nG1 E[new_retract_length_toolchange] F300\n{endif}\n\n{if flush_length_3 > 45 && flush_length_4 > 1}\n; WIPE\nM400\nM106 P1 S178\nM400 S3\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nM400\nM106 P1 S0\n{endif}\n\n{if flush_length_4 > 1}\nM106 P1 S60\n; FLUSH_START\nG1 E{flush_length_4 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_4 * 0.02} F50\nG1 E{flush_length_4 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_4 * 0.02} F50\nG1 E{flush_length_4 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_4 * 0.02} F50\nG1 E{flush_length_4 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_4 * 0.02} F50\nG1 E{flush_length_4 * 0.18} F{flush_volumetric_speeds[next_extruder]/2.4053*60}\nG1 E{flush_length_4 * 0.02} F50\n; FLUSH_END\n{endif}\n\nM629\n\nM400\nM106 P1 S60\nM109 S[new_filament_temp]\nG1 E6 F{flush_volumetric_speeds[next_extruder]/2.4053*60} ;Compensate for filament spillage during waiting temperature\nM400\nG92 E0\nG1 E-[new_retract_length_toolchange] F1800\nM400\nM106 P1 S178\nM400 S3\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nG1 X-38.2 F18000\nG1 X-48.2 F3000\nM400\nG1 Z{max_layer_z + 3.0} F3000\nM106 P1 S0\n{if layer_z <= (initial_layer_print_height + 0.001)}\nM204 S[initial_layer_acceleration]\n{else}\nM204 S[default_acceleration]\n{endif}\n{else}\nG1 X[x_after_toolchange] Y[y_after_toolchange] Z[z_after_toolchange] F12000\n{endif}\n\nM622.1 S0\nM9833 F{outer_wall_volumetric_speed/2.4} A0.3 ; cali dynamic extrusion compensation\nM1002 judge_flag filament_need_cali_flag\nM622 J1\n  G92 E0\n  G1 E-[new_retract_length_toolchange] F1800\n  M400\n  \n  M106 P1 S178\n  M400 S4\n  G1 X-38.2 F18000\n  G1 X-48.2 F3000\n  G1 X-38.2 F18000 ;wipe and shake\n  G1 X-48.2 F3000\n  G1 X-38.2 F12000 ;wipe and shake\n  G1 X-48.2 F3000\n  M400\n  M106 P1 S0 \nM623\n\nM621 S[next_extruder]A\nG392 S0\n\nM1007 S1\n","circle_compensation_manual_offset":"0","circle_compensation_speed":["200","200"],"close_additional_fan_first_x_layers":["1","1"],"close_fan_the_first_x_layers":["1","1"],"close_optional_fan_first_x_layers":["1","1"],"complete_print_exhaust_fan_speed":["70","70"],"conformal_hub_radius":"0","conformal_infill":"0","conformal_link_flip_layers":"0","conformal_link_keep_layers":"1","conformal_pole":"layer","conformal_ray_count":"0","conformal_stagger":"none","cool_plate_temp":["35","35"],"cool_plate_temp_initial_layer":["35","35"],"cooling_filter_enabled":"0","cooling_perimeter_transition_distance":["10","10"],"cooling_slowdown_logic":["uniform_cooling","uniform_cooling"],"counter_coef_1":["0","0"],"counter_coef_2":["0.008","0.008"],"counter_coef_3":["-0.041","-0.041"],"counter_limit_max":["0.033","0.033"],"counter_limit_min":["-0.035","-0.035"],"counterbore_hole_bridging":"none","curr_bed_type":"Textured PEI Plate","default_acceleration":["12000"],"default_ams_type":"-1","default_filament_colour":["",""],"default_filament_profile":["Bambu PLA Basic @BBL A1"],"default_jerk":"12","default_nozzle_volume_type":["Standard"],"default_print_profile":"0.20mm Standard @BBL A1","default_wipe_tower_pos":"0,1","deretraction_speed":["30"],"detect_floating_vertical_shell":"1","detect_narrow_internal_solid_infill":"1","detect_overhang_wall":"1","detect_thin_wall":"0","diameter_limit":["50","50"],"different_settings_to_system":["accel_to_decel_enable;accel_to_decel_factor;bottom_surface_pattern;bridge_flow;bridge_speed;default_acceleration;default_jerk;elefant_foot_compensation;enable_arc_fitting;enable_prime_tower;gap_infill_speed;infill_jerk;infill_wall_overlap;initial_layer_acceleration;initial_layer_line_width;initial_layer_speed;initial_layer_travel_acceleration;inner_wall_acceleration;inner_wall_line_width;interface_shells;internal_solid_infill_pattern;internal_solid_infill_speed;ironing_inset;ironing_speed;max_bridge_length;outer_wall_line_width;overhang_2_4_speed;overhang_3_4_speed;prime_tower_width;raft_first_layer_expansion;seam_slope_entire_loop;seam_slope_min_length;seam_slope_start_height;skeleton_infill_line_width;skin_infill_line_width;sparse_infill_density;sparse_infill_pattern;sparse_infill_speed;top_color_penetration_layers;top_one_wall_type;top_shell_layers;top_shell_thickness;top_surface_acceleration;top_surface_line_width;travel_acceleration;travel_jerk;travel_speed;tree_support_wall_count;wall_generator;wall_loops","","",""],"draft_shield":"disabled","during_print_exhaust_fan_speed":["70","70"],"elefant_foot_compensation":"0","embedding_wall_into_infill":"0","enable_arc_fitting":"0","enable_circle_compensation":"0","enable_filament_dynamic_map":"0","enable_height_slowdown":["0"],"enable_long_retraction_when_cut":"2","enable_mixed_color_sublayer":"0","enable_order_independent_overlap_carving":"0","enable_overhang_bridge_fan":["1","1"],"enable_overhang_speed":["1"],"enable_pre_heating":"0","enable_pressure_advance":["0","0"],"enable_prime_tower":"0","enable_support":"0","enable_support_ironing":"0","enable_tower_interface_features":"0","enable_wrapping_detection":"0","enforce_support_layers":"0","eng_plate_temp":["55","55"],"eng_plate_temp_initial_layer":["55","55"],"ensure_vertical_shell_thickness":"enabled","exclude_object":"1","extruder_ams_count":["1#0|4#0","1#0|4#0"],"extruder_clearance_dist_to_rod":"56.5","extruder_clearance_height_to_lid":"256","extruder_clearance_height_to_rod":"25","extruder_clearance_max_radius":"73","extruder_colour":["#018001"],"extruder_max_nozzle_count":["1"],"extruder_nozzle_count":["1"],"extruder_nozzle_diameter":["0.4"],"extruder_nozzle_slot":["0"],"extruder_nozzle_stats":["Standard#1"],"extruder_nozzle_stats_new":["Standard#1"],"extruder_nozzle_volume_type":["Standard"],"extruder_offset":["0x0"],"extruder_printable_area":[],"extruder_printable_height":[],"extruder_type":["Direct Drive"],"extruder_variant_list":["Direct Drive Standard"],"fan_cooling_layer_time":["80","80"],"fan_direction":"undefine","fan_max_speed":["80","80"],"fan_min_speed":["60","60"],"farthest_point_timelapse":"0","filament_adaptive_volumetric_speed":["0","0"],"filament_adhesiveness_category":["100","100"],"filament_bridge_speed":["25","25"],"filament_change_length":["5","5"],"filament_change_length_nc":["10","10"],"filament_colour":["#FFFFFF","#000000"],"filament_colour_type":["1","1"],"filament_cooling_before_tower":["0","0"],"filament_cost":["15.99","15.99"],"filament_density":["1.26","1.26"],"filament_deretraction_speed":["nil","nil"],"filament_dev_ams_drying_ams_limitations":["1","0","2","3","1","0","2","3"],"filament_dev_ams_drying_heat_distortion_temperature":["45","45","60","45","45","45","60","45"],"filament_dev_ams_drying_temperature":["45","45","45","45","55","55","45","45","45","45","45","45","55","55","45","45"],"filament_dev_ams_drying_time":["12","12","12","12","12","12","12","12","12","12","12","12","12","12","12","12"],"filament_dev_chamber_drying_bed_temperature":["70","70"],"filament_dev_chamber_drying_time":["12","12"],"filament_dev_drying_cooling_temperature":["45","45"],"filament_dev_drying_softening_temperature":["50","50","65","50","50","50","65","50"],"filament_diameter":["1.75","1.75"],"filament_diameter_map":["0.4","0.4"],"filament_enable_overhang_speed":["1","1"],"filament_end_gcode":["; filament end gcode \n\n","; filament end gcode \n\n"],"filament_extruder_compatibility":["0","0"],"filament_extruder_variant":["Direct Drive Standard","Direct Drive Standard"],"filament_flow_ratio":["0.98","0.98"],"filament_flush_temp":["0","0"],"filament_flush_temp_fast":["0","0"],"filament_flush_volumetric_speed":["0","0"],"filament_idle_travel_cooling_enabled":["1","1"],"filament_ids":["GFA00","GFA00"],"filament_is_mixed":["0","0"],"filament_is_support":["0","0"],"filament_long_retractions_when_cut":["1","1"],"filament_map":["1","1"],"filament_map_mode":"Auto For Flush","filament_max_volumetric_speed":["21","21"],"filament_metal_stickiness":["None","None"],"filament_minimal_purge_on_wipe_tower":["15","15"],"filament_mixed_components":["",""],"filament_mixed_gradient":["0","0"],"filament_mixed_gradient_curve":[""],"filament_mixed_gradient_per_part":["0"],"filament_mixed_gradient_range":["",""],"filament_mixed_sublayer_ratios":["",""],"filament_multi_colour":["#FFFFFF","#000000"],"filament_notes":"","filament_nozzle_map":["0","0"],"filament_overhang_1_4_speed":["0","0"],"filament_overhang_2_4_speed":["50","50"],"filament_overhang_3_4_speed":["30","30"],"filament_overhang_4_4_speed":["10","10"],"filament_overhang_totally_speed":["10","10"],"filament_pre_cooling_temperature":["0","0"],"filament_pre_cooling_temperature_nc":["0","0"],"filament_pre_heating_enabled":["1","1"],"filament_preheat_temperature_delta":["0","0"],"filament_prime_tower_speed_factor_curve":["",""],"filament_prime_volume":["30","30"],"filament_prime_volume_nc":["60","60"],"filament_printable":["3","3"],"filament_ramming_travel_time":["0","0"],"filament_ramming_travel_time_nc":["0","0"],"filament_ramming_volumetric_speed":["-1","-1"],"filament_ramming_volumetric_speed_nc":["-1","-1"],"filament_retract_before_wipe":["nil","nil"],"filament_retract_length_nc":["14","14"],"filament_retract_length_toolchange":["nil","nil"],"filament_retract_restart_extra":["nil","nil"],"filament_retract_restart_extra_toolchange":["nil","nil"],"filament_retract_when_changing_layer":["nil","nil"],"filament_retraction_distances_when_cut":["18","18"],"filament_retraction_length":["nil","nil"],"filament_retraction_minimum_travel":["nil","nil"],"filament_retraction_speed":["nil","nil"],"filament_scarf_gap":["0%","0%"],"filament_scarf_height":["10%","10%"],"filament_scarf_length":["10","10"],"filament_scarf_seam_type":["none","none"],"filament_self_index":["1","2"],"filament_settings_id":["Bambu PLA Basic @BBL A1","Bambu PLA Basic @BBL A1"],"filament_shrink":["100%","100%"],"filament_soluble":["0","0"],"filament_start_gcode":["; filament start gcode\n{if  (bed_temperature[current_extruder] >55)||(bed_temperature_initial_layer[current_extruder] >55)}M106 P3 S200\n{elsif(bed_temperature[current_extruder] >50)||(bed_temperature_initial_layer[current_extruder] >50)}M106 P3 S150\n{elsif(bed_temperature[current_extruder] >45)||(bed_temperature_initial_layer[current_extruder] >45)}M106 P3 S50\n{endif}\n\n{if activate_air_filtration[current_extruder] && support_air_filtration}\nM106 P3 S{during_print_exhaust_fan_speed_num[current_extruder]} \n{endif}","; filament start gcode\n{if  (bed_temperature[current_extruder] >55)||(bed_temperature_initial_layer[current_extruder] >55)}M106 P3 S200\n{elsif(bed_temperature[current_extruder] >50)||(bed_temperature_initial_layer[current_extruder] >50)}M106 P3 S150\n{elsif(bed_temperature[current_extruder] >45)||(bed_temperature_initial_layer[current_extruder] >45)}M106 P3 S50\n{endif}\n\n{if activate_air_filtration[current_extruder] && support_air_filtration}\nM106 P3 S{during_print_exhaust_fan_speed_num[current_extruder]} \n{endif}"],"filament_tower_interface_pre_extrusion_dist":["10","10"],"filament_tower_interface_pre_extrusion_length":["0","0"],"filament_tower_interface_print_temp":["-1","-1"],"filament_tower_interface_purge_volume":["20","20"],"filament_tower_ironing_area":["4","4"],"filament_type":["PLA","PLA"],"filament_velocity_adaptation_factor":["1","1"],"filament_vendor":["Bambu Lab","Bambu Lab"],"filament_volume_map":["0","0"],"filament_wipe":["nil","nil"],"filament_wipe_distance":["nil","nil"],"filament_z_hop":["nil","nil"],"filament_z_hop_types":["nil","nil"],"filename_format":"{input_filename_base}_{filament_type[0]}_{print_time}.gcode","fill_multiline":"1","filter_out_gap_fill":"0","fins_extrude_safe_temp":["57","57"],"first_layer_print_sequence":["0"],"first_x_layer_fan_speed":["0","0"],"first_x_layer_optional_fan_speed":["0","0"],"first_x_layer_part_fan_speed":["0","0"],"flush_into_infill":"0","flush_into_objects":"0","flush_into_support":"1","flush_multiplier":["1"],"flush_multiplier_fast":["1.2"],"flush_volumes_matrix":["0","128","608","0"],"flush_volumes_vector":["140","140","140","140"],"from":"project","full_fan_speed_layer":["0","0"],"fuzzy_skin":"none","fuzzy_skin_first_layer":"0","fuzzy_skin_mode":"displacement","fuzzy_skin_noise_type":"classic","fuzzy_skin_octaves":"4","fuzzy_skin_persistence":"0.5","fuzzy_skin_point_distance":"0.8","fuzzy_skin_scale":"1","fuzzy_skin_thickness":"0.3","gap_infill_speed":["200"],"gcode_add_line_number":"0","gcode_flavor":"marlin","grab_length":["17.4"],"group_algo_with_time":"0","handle_hotend_as_extruder":"0","has_filament_switcher":"0","has_scarf_joint_seam":"0","head_wrap_detect_zone":["226x224","256x224","256x256","226x256"],"hole_coef_1":["0","0"],"hole_coef_2":["-0.008","-0.008"],"hole_coef_3":["0.23415","0.23415"],"hole_limit_max":["0.22","0.22"],"hole_limit_min":["0.088","0.088"],"host_type":"octoprint","hot_plate_temp":["65","65"],"hot_plate_temp_initial_layer":["65","65"],"hotend_cooling_rate":["2"],"hotend_cooling_rate_on_rack":["2"],"hotend_heating_rate":["2"],"impact_strength_z":["13.8","13.8"],"independent_support_layer_height":"1","infill_combination":"0","infill_direction":"45","infill_instead_top_bottom_surfaces":"0","infill_jerk":"12","infill_lock_depth":"1","infill_rotate_step":"0","infill_shift_step":"0.4","infill_wall_overlap":"30%","inherits_group":["0.20mm Standard @BBL A1","","",""],"initial_layer_acceleration":["2000"],"initial_layer_flow_ratio":"1","initial_layer_infill_line_width":"0.5","initial_layer_infill_speed":["105"],"initial_layer_jerk":"9","initial_layer_line_width":"0.4","initial_layer_print_height":"0.2","initial_layer_speed":["60"],"initial_layer_travel_acceleration":["500"],"inner_wall_acceleration":["6000"],"inner_wall_jerk":"9","inner_wall_line_width":"0.3","inner_wall_speed":["300"],"interface_shells":"1","interlocking_beam":"0","interlocking_beam_layer_count":"2","interlocking_beam_width":"0.8","interlocking_boundary_avoidance":"2","interlocking_depth":"2","interlocking_orientation":"22.5","internal_bridge_support_thickness":"0.8","internal_solid_infill_line_width":"0.42","internal_solid_infill_pattern":"monotonic","internal_solid_infill_speed":["200"],"ironing_direction":"45","ironing_fan_speed":["-1","-1"],"ironing_flow":"10%","ironing_inset":"0","ironing_pattern":"zig-zag","ironing_spacing":"0.15","ironing_speed":"100","ironing_type":"no ironing","is_infill_first":"0","layer_change_gcode":"; layer num/total_layer_count: {layer_num+1}/[total_layer_count]\n; update layer progress\nM73 L{layer_num+1}\nM991 S0 P{layer_num} ;notify layer change","layer_height":"0.2","line_width":"0.42","locked_skeleton_infill_pattern":"zigzag","locked_skin_infill_pattern":"crosszag","long_retractions_when_cut":["0"],"long_retractions_when_ec":["0","0"],"machine_bed_mass_Y":"0","machine_end_gcode":";===== date: 20260513 =====================\nG392 S0 ;turn off nozzle clog detect\n\nM400 ; wait for buffer to clear\nG92 E0 ; zero the extruder\nG90\nG1 Z{max_layer_z + 0.4} F900 ; lower z a little\nG1 X0 Y{first_layer_center_no_wipe_tower[1]} F18000 ; move to safe pos\nG1 X-13.0 F3000 ; move to safe pos\n{if !spiral_mode && print_sequence != \"by object\"}\nM1002 judge_flag timelapse_record_flag\nM622 J1\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM400 P100\nM971 S11 C11 O0\nM991 S0 P-1 ;end timelapse at safe pos\nM623\n{endif}\n\nM140 S0 ; turn off bed\nM106 S0 ; turn off fan\nM106 P2 S0 ; turn off remote part cooling fan\nM106 P3 S0 ; turn off chamber cooling fan\n\n;G1 X27 F15000 ; wipe\n\n; pull back filament to AMS\nM620 S255\nG1 X267 F15000\nT255\nG1 X-28.5 F18000\nG1 X-48.2 F3000\nG1 X-28.5 F18000\nG1 X-48.2 F3000\nM621 S255\n\nM104 S0 ; turn off hotend\n\nM400 ; wait all motion done\nM17 S\nM17 Z0.4 ; lower z motor current to reduce impact if there is something in the bottom\n{if (max_layer_z + 100.0) < 256}\n    G1 Z{max_layer_z + 100.0} F600\n    G1 Z{max_layer_z +98.0}\n{else}\n    G1 Z256 F600\n    G1 Z256\n{endif}\nM400 P100\nM17 R ; restore z current\n\nG90\nG1 X-48 Y180 F3600\n\nM220 S100  ; Reset feedrate magnitude\nM201.2 K1.0 ; Reset acc magnitude\nM73.2   R1.0 ;Reset left time magnitude\nM1002 set_gcode_claim_speed_level : 0\n\n;=====printer finish  sound=========\nM17\nM400 S1\nM1006 S1\nM1006 A0 B20 L100 C37 D20 M40 E42 F20 N60\nM1006 A0 B10 L100 C44 D10 M60 E44 F10 N60\nM1006 A0 B10 L100 C46 D10 M80 E46 F10 N80\nM1006 A44 B20 L100 C39 D20 M60 E48 F20 N60\nM1006 A0 B10 L100 C44 D10 M60 E44 F10 N60\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N60\nM1006 A0 B10 L100 C39 D10 M60 E39 F10 N60\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N60\nM1006 A0 B10 L100 C44 D10 M60 E44 F10 N60\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N60\nM1006 A0 B10 L100 C39 D10 M60 E39 F10 N60\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N60\nM1006 A0 B10 L100 C48 D10 M60 E44 F10 N80\nM1006 A0 B10 L100 C0 D10 M60 E0 F10  N80\nM1006 A44 B20 L100 C49 D20 M80 E41 F20 N80\nM1006 A0 B20 L100 C0 D20 M60 E0 F20 N80\nM1006 A0 B20 L100 C37 D20 M30 E37 F20 N60\nM1006 W\n;=====printer finish  sound=========\n\n;M17 X0.8 Y0.8 Z0.5 ; lower motor current to 45% power\nM400\nM18 X Y Z\n\n","machine_hotend_change_time":"0","machine_load_filament_time":"25","machine_max_acceleration_e":["5000","5000"],"machine_max_acceleration_extruding":["12000","12000"],"machine_max_acceleration_retracting":["5000","5000"],"machine_max_acceleration_travel":["9000","9000"],"machine_max_acceleration_x":["12000","12000"],"machine_max_acceleration_y":["12000","12000"],"machine_max_acceleration_z":["1500","1500"],"machine_max_force_Y":"0","machine_max_jerk_e":["3","3"],"machine_max_jerk_x":["9","9"],"machine_max_jerk_y":["9","9"],"machine_max_jerk_z":["3","3"],"machine_max_printed_mass":"0","machine_max_speed_e":["30","30"],"machine_max_speed_x":["500","200"],"machine_max_speed_y":["500","200"],"machine_max_speed_z":["30","30"],"machine_min_extruding_rate":["0","0"],"machine_min_travel_rate":["0","0"],"machine_pause_gcode":"M400 U1","machine_prepare_compensation_time":"260","machine_start_gcode":";===== machine: A1 =========================\n;===== date: 20260513 ==================\nG392 S0\nM9833.2\n;M400\n;M73 P1.717\n\n;===== start to heat heatbead&hotend==========\nM1002 gcode_claim_action : 2\nM1002 set_filament_type:{filament_type[initial_no_support_extruder]}\nM104 S140\nM140 S[bed_temperature_initial_layer_single]\n\n;=====start printer sound ===================\nM17\nM400 S1\nM1006 S1\nM1006 A0 B10 L100 C37 D10 M60 E37 F10 N60\nM1006 A0 B10 L100 C41 D10 M60 E41 F10 N60\nM1006 A0 B10 L100 C44 D10 M60 E44 F10 N60\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N60\nM1006 A43 B10 L100 C46 D10 M70 E39 F10 N80\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N80\nM1006 A0 B10 L100 C43 D10 M60 E39 F10 N80\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N80\nM1006 A0 B10 L100 C41 D10 M80 E41 F10 N80\nM1006 A0 B10 L100 C44 D10 M80 E44 F10 N80\nM1006 A0 B10 L100 C49 D10 M80 E49 F10 N80\nM1006 A0 B10 L100 C0 D10 M80 E0 F10 N80\nM1006 A44 B10 L100 C48 D10 M60 E39 F10 N80\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N80\nM1006 A0 B10 L100 C44 D10 M80 E39 F10 N80\nM1006 A0 B10 L100 C0 D10 M60 E0 F10 N80\nM1006 A43 B10 L100 C46 D10 M60 E39 F10 N80\nM1006 W\nM18 \n;=====start printer sound ===================\n\n;=====avoid end stop =================\nG91\nG380 S2 Z40 F1200\nG380 S3 Z-15 F1200\nG90\n\n;===== reset machine status =================\n;M290 X39 Y39 Z8\nM204 S6000\n\nM630 S0 P0\nG91\nM17 Z0.3 ; lower the z-motor current\n\nG90\nM17 X0.65 Y1.2 Z0.6 ; reset motor current to default\nM960 S5 P1 ; turn on logo lamp\nG90\nM220 S100 ;Reset Feedrate\nM221 S100 ;Reset Flowrate\nM73.2   R1.0 ;Reset left time magnitude\n;M211 X0 Y0 Z0 ; turn off soft endstop to prevent protential logic problem\n\n;====== cog noise reduction=================\nM982.2 S1 ; turn on cog noise reduction\n\nM1002 gcode_claim_action : 13\n\nG28 X\nG91\nG1 Z5 F1200\nG90\nG0 X128 F30000\nG0 Y254 F3000\nG91\nG1 Z-5 F1200\n\nM109 S25 H140\n\nM17 E0.3\nM83\nG1 E10 F1200\nG1 E-0.5 F30\nM17 D\n\nG28 Z P0 T140; home z with low precision,permit 300deg temperature\nM104 S{nozzle_temperature_initial_layer[initial_extruder]}\n\nM1002 judge_flag build_plate_detect_flag\nM622 S1\n  G39.4\n  G90\n  G1 Z5 F1200\nM623\n\n;M400\n;M73 P1.717\n\n;===== prepare print temperature and material ==========\nM1002 gcode_claim_action : 24\n\nM400\n;G392 S1\nM211 X0 Y0 Z0 ;turn off soft endstop\nM975 S1 ; turn on\n\nG90\nG1 X-28.5 F30000\nG1 X-48.2 F3000\n\nM620 M ;enable remap\nM620 S[initial_no_support_extruder]A   ; switch material if AMS exist\n    M1002 gcode_claim_action : 4\n    M400\n    M1002 set_filament_type:UNKNOWN\n    M109 S[nozzle_temperature_initial_layer]\n{if (filament_type[initial_no_support_extruder] == \"PLA\") && (nozzle_diameter != 0.2)}\n    M104 S220\n{else}\n    M104 S250\n{endif}\n    M400\n    T[initial_no_support_extruder]\n    G1 X-48.2 F3000\n    M400\n\n{if (filament_type[initial_no_support_extruder] == \"PLA\") && (nozzle_diameter != 0.2)}\n    M620.1 E F{flush_volumetric_speeds[initial_no_support_extruder]/2.4053*60} T220\n    M109 S220 ;set nozzle to common flush temp\n{else}\n    M620.1 E F{flush_volumetric_speeds[initial_no_support_extruder]/2.4053*60} T{flush_temperatures[initial_no_support_extruder]}\n    M109 S250 ;set nozzle to common flush temp\n{endif}\n    M106 P1 S0\n    G92 E0\n    G1 E50 F200\n    M400\n    M1002 set_filament_type:{filament_type[initial_no_support_extruder]}\nM621 S[initial_no_support_extruder]A\n\n{if (filament_type[initial_no_support_extruder] == \"PLA\") && (nozzle_diameter != 0.2)}\n    M109 S220 H300\n{else}\n    M109 S{flush_temperatures[initial_no_support_extruder]} H300\n{endif}\nG92 E0\nG1 E50 F200 ; lower extrusion speed to avoid clog\nM400\nM106 P1 S178\nG92 E0\nG1 E5 F200\nM104 S{nozzle_temperature_initial_layer[initial_no_support_extruder]}\nG92 E0\nG1 E-0.5 F300\n\nG1 X-28.5 F30000\nG1 X-48.2 F3000\nG1 X-28.5 F30000 ;wipe and shake\nG1 X-48.2 F3000\nG1 X-28.5 F30000 ;wipe and shake\nG1 X-48.2 F3000\n\n;G392 S0\n\nM400\nM106 P1 S0\n;===== prepare print temperature and material end =====\n\n;M400\n;M73 P1.717\n\n;===== auto extrude cali start =========================\nM975 S1\n;G392 S1\n\nG90\nM83\nT1000\nG1 X-48.2 Y0 Z10 F10000\nM400\nM1002 set_filament_type:UNKNOWN\n\nM412 S1 ;  ===turn on  filament runout detection===\nM400 P10\nM620.3 W1; === turn on filament tangle detection===\nM400 S2\n\nM1002 set_filament_type:{filament_type[initial_no_support_extruder]}\n\n;M1002 set_flag extrude_cali_flag=1\nM1002 judge_flag extrude_cali_flag\n\nM622 J1\n    M1002 gcode_claim_action : 8\n\n    M109 S{nozzle_temperature[initial_extruder]}\n    G1 E10 F{outer_wall_volumetric_speed/2.4*60}\n    M983 F{outer_wall_volumetric_speed/2.4} A0.3 H[nozzle_diameter]; cali dynamic extrusion compensation\n\n    M106 P1 S255\n    M400 S5\n    G1 X-28.5 F18000\n    G1 X-48.2 F3000\n    G1 X-28.5 F18000 ;wipe and shake\n    G1 X-48.2 F3000\n    G1 X-28.5 F12000 ;wipe and shake\n    G1 X-48.2 F3000\n    M400\n    M106 P1 S0\n\n    M1002 judge_last_extrude_cali_success\n    M622 J0\n        M983 F{outer_wall_volumetric_speed/2.4} A0.3 H[nozzle_diameter]; cali dynamic extrusion compensation\n        M106 P1 S255\n        M400 S5\n        G1 X-28.5 F18000\n        G1 X-48.2 F3000\n        G1 X-28.5 F18000 ;wipe and shake\n        G1 X-48.2 F3000\n        G1 X-28.5 F12000 ;wipe and shake\n        M400\n        M106 P1 S0\n    M623\n    \n    G1 X-48.2 F3000\n    M400\n    M984 A0.1 E1 S1 F{outer_wall_volumetric_speed/2.4} H[nozzle_diameter]\n    M106 P1 S178\n    M400 S7\n    G1 X-28.5 F18000\n    G1 X-48.2 F3000\n    G1 X-28.5 F18000 ;wipe and shake\n    G1 X-48.2 F3000\n    G1 X-28.5 F12000 ;wipe and shake\n    G1 X-48.2 F3000\n    M400\n    M106 P1 S0\nM623 ; end of \"draw extrinsic para cali paint\"\n\n;G392 S0\n;===== auto extrude cali end ========================\n\n;M400\n;M73 P1.717\n\nM104 S170 ; prepare to wipe nozzle\nM106 S255 ; turn on fan\n\n;===== mech mode fast check start =====================\nM1002 gcode_claim_action : 3\n\nG1 X128 Y128 F20000\nG1 Z5 F1200\nM400 P200\nM970.3 Q1 A5 K0 O3\nM974 Q1 S2 P0\n\nM970.2 Q1 K1 W58 Z0.1\nM974 S2\n\nG1 X128 Y128 F20000\nG1 Z5 F1200\nM400 P200\nM970.3 Q0 A10 K0 O1\nM974 Q0 S2 P0\n\nM970.2 Q0 K1 W78 Z0.1\nM974 S2\n\nM975 S1\nG1 F30000\nG1 X0 Y5\nG28 X ; re-home XY\n\nG1 Z4 F1200\n\n;===== mech mode fast check end =======================\n\n;M400\n;M73 P1.717\n\n;===== wipe nozzle ===============================\nM1002 gcode_claim_action : 14\n\nM975 S1\nM106 S255 ; turn on fan (G28 has turn off fan)\nM211 S; push soft endstop status\nM211 X0 Y0 Z0 ;turn off Z axis endstop\n\n;===== remove waste by touching start =====\n\nM104 S170 ; set temp down to heatbed acceptable\n\nM83\nG1 E-1 F500\nG90\nM83\n\nM109 S170\nG0 X108 Y-0.5 F30000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X110 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X112 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X114 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X116 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X118 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X120 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X122 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X124 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X126 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X128 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X130 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X132 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X134 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X136 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X138 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X140 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X142 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X144 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X146 F10000\nG380 S3 Z-5 F1200\nG1 Z2 F1200\nG1 X148 F10000\nG380 S3 Z-5 F1200\n\nG1 Z5 F30000\n;===== remove waste by touching end =====\n\nG1 Z10 F1200\nG0 X118 Y261 F30000\nG1 Z5 F1200\nM109 S{nozzle_temperature_initial_layer[initial_extruder]-50}\n\nG28 Z P0 T300; home z with low precision,permit 300deg temperature\nG29.2 S0 ; turn off ABL\nM104 S140 ; prepare to abl\nG0 Z5 F20000\n\nG0 X128 Y261 F20000  ; move to exposed steel surface\nG0 Z-1.01 F1200      ; stop the nozzle\n\nG91\nG2 I1 J0 X2 Y0 F2000.1\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\n\nG90\nG1 Z10 F1200\n\n;===== brush material wipe nozzle =====\n\nG90\nG1 Y250 F30000\nG1 X55\nG1 Z1.300 F1200\nG1 Y262.5 F6000\nG91\nG1 X-35 F30000\nG1 Y-0.5\nG1 X45\nG1 Y-0.5\nG1 X-45\nG1 Y-0.5\nG1 X45\nG1 Y-0.5\nG1 X-45\nG1 Y-0.5\nG1 X45\nG1 Z5.000 F1200\n\nG90\nG1 X30 Y250.000 F30000\nG1 Z1.300 F1200\nG1 Y262.5 F6000\nG91\nG1 X35 F30000\nG1 Y-0.5\nG1 X-45\nG1 Y-0.5\nG1 X45\nG1 Y-0.5\nG1 X-45\nG1 Y-0.5\nG1 X45\nG1 Y-0.5\nG1 X-45\nG1 Z10.000 F1200\n\n;===== brush material wipe nozzle end =====\n\nG90\n;G0 X128 Y261 F20000  ; move to exposed steel surface\nG1 Y250 F30000\nG1 X138\nG1 Y261\nG0 Z-1.01 F1200      ; stop the nozzle\n\nG91\nG2 I1 J0 X2 Y0 F2000.1\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\nG2 I1 J0 X2\nG2 I-0.75 J0 X-1.5\n\nM109 S140\nM106 S255 ; turn on fan (G28 has turn off fan)\n\nM211 R; pop softend status\n\n;===== wipe nozzle end ================================\n\n;M400\n;M73 P1.717\n\n;===== bed leveling ==================================\nM1002 judge_flag g29_before_print_flag\n\nG90\nG1 Z5 F1200\nG1 X0 Y0 F30000\nG29.2 S1 ; turn on ABL\n\nM190 S[bed_temperature_initial_layer_single]; ensure bed temp\nM109 S140\nM106 S0 ; turn off fan , too noisy\n\nM622 J1\n    M1002 gcode_claim_action : 1\n    G29 A1 X{first_layer_print_min[0]} Y{first_layer_print_min[1]} I{first_layer_print_size[0]} J{first_layer_print_size[1]}\n    M400\n    M500 ; save cali data\nM623\n;===== bed leveling end ================================\n\n;===== home after wipe mouth============================\nM1002 judge_flag g29_before_print_flag\nM622 J0\n\n    M1002 gcode_claim_action : 13\n    G28\n\nM623\n\n;===== home after wipe mouth end =======================\n\n;M400\n;M73 P1.717\n\nG1 X108.000 Y-0.500 F30000\nG1 Z0.300 F1200\nM400\nG2814 Z0.32\n\nM104 S{nozzle_temperature_initial_layer[initial_extruder]} ; prepare to print\n\n;===== nozzle load line ===============================\n;G90\n;M83\n;G1 Z5 F1200\n;G1 X88 Y-0.5 F20000\n;G1 Z0.3 F1200\n\n;M109 S{nozzle_temperature_initial_layer[initial_extruder]}\n\n;G1 E2 F300\n;G1 X168 E4.989 F6000\n;G1 Z1 F1200\n;===== nozzle load line end ===========================\n\n;===== extrude cali test ===============================\n\nM400\n    M900 S\n    M900 C\n    G90\n    M83\n\n    M109 S{nozzle_temperature_initial_layer[initial_extruder]}\n    G0 X128 E8  F{outer_wall_volumetric_speed/(24/20)    * 60}\n    G0 X133 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)/4     * 60}\n    G0 X138 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)     * 60}\n    G0 X143 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)/4     * 60}\n    G0 X148 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)     * 60}\n    G0 X153 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)/4     * 60}\n    G91\n    G1 X1 Z-0.300\n    G1 X4\n    G1 Z1 F1200\n    G90\n    M400\n\nM900 R\n\nM1002 judge_flag extrude_cali_flag\nM622 J1\n    G90\n    G1 X108.000 Y1.000 F30000\n    G91\n    G1 Z-0.700 F1200\n    G90\n    M83\n    G0 X128 E10  F{outer_wall_volumetric_speed/(24/20)    * 60}\n    G0 X133 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)/4     * 60}\n    G0 X138 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)     * 60}\n    G0 X143 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)/4     * 60}\n    G0 X148 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)     * 60}\n    G0 X153 E.3742  F{outer_wall_volumetric_speed/(0.3*0.5)/4     * 60}\n    G91\n    G1 X1 Z-0.300\n    G1 X4\n    G1 Z1 F1200\n    G90\n    M400\nM623\n\nG1 Z0.2\n\n;M400\n;M73 P1.717\n\n;========turn off light and wait extrude temperature =============\nM1002 gcode_claim_action : 0\nM400\n\n;===== for Textured PEI Plate , lower the nozzle as the nozzle was touching topmost of the texture when homing ==\n;curr_bed_type={curr_bed_type}\n{if curr_bed_type==\"Textured PEI Plate\"}\nG29.1 Z{-0.02} ; for Textured PEI Plate\n{endif}\n\nM960 S1 P0 ; turn off laser\nM960 S2 P0 ; turn off laser\nM106 S0 ; turn off fan\nM106 P2 S0 ; turn off big fan\nM106 P3 S0 ; turn off chamber fan\n\nM975 S1 ; turn on mech mode supression\nG90\nM83\nT1000\n\nM211 X0 Y0 Z0 ;turn off soft endstop\n;G392 S1 ; turn on clog detection\nM1007 S1 ; turn on mass estimation\nG29.4\n","machine_switch_extruder_time":"0","machine_unload_filament_time":"29","master_extruder_id":"1","max_bridge_length":"10","max_layer_height":["0.28"],"max_travel_detour_distance":"0","min_bead_width":"85%","min_feature_size":"25%","min_layer_height":["0.08"],"min_temperature_when_ec":["-1","-1"],"minimum_sparse_infill_area":"15","mmu_segmented_region_interlocking_depth":"0","mmu_segmented_region_max_width":"0","modifier_ignore_infill":"0","monotonic_travel_into_wall":"0%","multi_nozzle_diameter_mode":"0","name":"project_settings","no_slow_down_for_cooling_on_outwalls":["0","0"],"nozzle_diameter":["0.4"],"nozzle_flush_dataset":["0"],"nozzle_height":"4.76","nozzle_temperature":["220","220"],"nozzle_temperature_initial_layer":["220","220"],"nozzle_temperature_range_high":["240","240"],"nozzle_temperature_range_low":["190","190"],"nozzle_volume":["92"],"nozzle_volume_type":["Standard"],"only_one_wall_first_layer":"0","ooze_prevention":"0","optional_cooling_fan_speed":["70","70"],"optional_fan_full_speed_layer":["0","0"],"other_layers_print_sequence":["0"],"other_layers_print_sequence_nums":"0","outer_wall_acceleration":["5000"],"outer_wall_jerk":"9","outer_wall_line_width":"0.3","outer_wall_speed":["200"],"overhang_1_4_speed":["0"],"overhang_2_4_speed":["30"],"overhang_3_4_speed":["20"],"overhang_4_4_speed":["10"],"overhang_fan_speed":["100","100"],"overhang_fan_threshold":["50%","50%"],"overhang_threshold_participating_cooling":["95%","95%"],"overhang_totally_speed":["10"],"override_filament_scarf_seam_setting":"0","override_process_overhang_speed":["0","0"],"periodic_modifier":"0","periodic_modifier_apply_layers":"1","periodic_modifier_skip_layers":"1","physical_extruder_map":["0"],"post_process":[],"pre_start_fan_time":["2","2"],"precise_outer_wall":"0","precise_z_height":"0","pressure_advance":["0.02","0.02"],"prime_tower_acceleration":"0","prime_tower_brim_width":"3","prime_tower_enable_framework":"0","prime_tower_extra_rib_length":"0","prime_tower_feedrate_factor":"1","prime_tower_fillet_wall":"1","prime_tower_flat_ironing":"0","prime_tower_infill_gap":"150%","prime_tower_ironing_speed":"10","prime_tower_lift_height":"-1","prime_tower_lift_speed":"90","prime_tower_line_ironing":"1","prime_tower_line_width":"0","prime_tower_max_speed":"90","prime_tower_ramming_line_width":"0","prime_tower_rib_wall":"1","prime_tower_rib_width":"8","prime_tower_side_scrape":"0","prime_tower_side_scrape_along_length":"2","prime_tower_side_scrape_face":"front_back","prime_tower_side_scrape_height":"1.5","prime_tower_side_scrape_length":"2","prime_tower_side_scrape_point_spacing":"1","prime_tower_side_scrape_speed":"1400","prime_tower_side_scrape_wall_gap":"0.2","prime_tower_skip_points":"1","prime_tower_tail_slowdown_volume":"10","prime_tower_tail_speed_factor":"100%","prime_tower_width":"30","prime_tower_wipe_distance":"0","prime_tower_wipe_speed":"0","prime_volume_mode":"Default","print_compatible_printers":["Bambu Lab A1 0.4 nozzle"],"print_extruder_id":["1"],"print_extruder_variant":["Direct Drive Standard"],"print_flow_ratio":"1","print_in_clockwise":"0","print_sequence":"by layer","print_settings_id":"Formato3D Chaveiro","printable_area":["0x0","256x0","256x256","0x256"],"printable_height":"256","printer_extruder_id":["1"],"printer_extruder_variant":["Direct Drive Standard"],"printer_model":"Bambu Lab A1","printer_notes":"","printer_nozzle_diameter_mode":"","printer_settings_id":"Bambu Lab A1 0.4 nozzle","printer_structure":"i3","printer_technology":"FFF","printer_variant":"0.4","printhost_authorization_type":"key","printhost_ssl_ignore_revoke":"0","printing_by_object_gcode":"","process_notes":"","raft_contact_distance":"0.1","raft_expansion":"1.5","raft_first_layer_density":"90%","raft_first_layer_expansion":"2","raft_layers":"0","reduce_crossing_wall":"0","reduce_fan_stop_start_freq":["1","1"],"reduce_infill_retraction_mode":"Auto","required_nozzle_HRC":["3","3"],"resolution":"0.012","retract_before_wipe":["0%"],"retract_length_toolchange":["2"],"retract_lift_above":["0"],"retract_lift_below":["255"],"retract_restart_extra":["0"],"retract_restart_extra_toolchange":["0"],"retract_when_changing_layer":["1"],"retraction_distances_when_cut":["18"],"retraction_distances_when_ec":["0","0"],"retraction_length":["0.8"],"retraction_minimum_travel":["1"],"retraction_speed":["30"],"role_base_wipe_speed":"1","scan_first_layer":"0","scarf_angle_threshold":"155","seam_gap":"15%","seam_placement_away_from_overhangs":"0","seam_position":"aligned","seam_slope_conditional":"1","seam_slope_entire_loop":"1","seam_slope_gap":"0","seam_slope_inner_walls":"1","seam_slope_min_length":"20","seam_slope_start_height":"0","seam_slope_steps":"10","seam_slope_type":"none","silent_mode":"0","single_extruder_multi_material":"1","skeleton_infill_density":"15%","skeleton_infill_line_width":"0.4","skin_infill_density":"15%","skin_infill_depth":"2","skin_infill_line_width":"0.4","skirt_distance":"2","skirt_height":"1","skirt_loops":"0","skirt_per_object":"1","slice_closing_radius":"0.049","slicing_mode":"regular","slow_down_for_layer_cooling":["1","1"],"slow_down_layer_time":["6","6"],"slow_down_min_speed":["20","20"],"slowdown_end_acc":["100000"],"slowdown_end_height":["400"],"slowdown_end_speed":["1000"],"slowdown_start_acc":["100000"],"slowdown_start_height":["0"],"slowdown_start_speed":["1000"],"small_perimeter_speed":["50%"],"small_perimeter_threshold":["0"],"smooth_coefficient":"80","smooth_speed_discontinuity_area":"1","solid_infill_filament":"0","sparse_infill_acceleration":["100%"],"sparse_infill_anchor":"400%","sparse_infill_anchor_max":"20","sparse_infill_density":"10%","sparse_infill_filament":"0","sparse_infill_lattice_angle_1":"-45","sparse_infill_lattice_angle_2":"45","sparse_infill_line_width":"0.45","sparse_infill_pattern":"zig-zag","sparse_infill_speed":["200"],"spiral_mode":"0","spiral_mode_max_xy_smoothing":"200%","spiral_mode_smooth":"0","standby_temperature_delta":"-5","start_end_points":["30x-3","54x245"],"sub_top_surface_pattern":"monotonic","supertack_plate_temp":["45","45"],"supertack_plate_temp_initial_layer":["45","45"],"support_air_filtration":"0","support_angle":"0","support_base_pattern":"default","support_base_pattern_spacing":"2.5","support_bottom_interface_spacing":"0.5","support_bottom_z_distance":"0.2","support_chamber_temp_control":"0","support_cooling_filter":"0","support_critical_regions_only":"0","support_expansion":"0","support_fast_purge_mode":"0","support_filament":"0","support_interface_bottom_layers":"2","support_interface_filament":"0","support_interface_loop_pattern":"0","support_interface_not_for_body":"1","support_interface_pattern":"auto","support_interface_spacing":"0.5","support_interface_speed":["80"],"support_interface_top_layers":"2","support_ironing_direction":"0","support_ironing_flow":"10%","support_ironing_inset":"0","support_ironing_pattern":"zig-zag","support_ironing_spacing":"0.15","support_ironing_speed":"30","support_line_width":"0.42","support_object_first_layer_gap":"0.2","support_object_skip_flush":"0","support_object_xy_distance":"0.35","support_on_build_plate_only":"0","support_remove_small_overhang":"1","support_speed":["150"],"support_style":"default","support_threshold_angle":"30","support_top_z_distance":"0.2","support_type":"tree(auto)","symmetric_infill_y_axis":"0","sync_auxiliary_fan_to_second_fan":"0","temperature_vitrification":["45","45"],"template_custom_gcode":"","textured_plate_temp":["65","65"],"textured_plate_temp_initial_layer":["65","65"],"thick_bridges":"0","thumbnail_size":["50x50"],"time_lapse_gcode":";===================== date: 20250206 =====================\n{if !spiral_mode && print_sequence != \"by object\"}\n; don't support timelapse gcode in spiral_mode and by object sequence for I3 structure printer\n; SKIPPABLE_START\n; SKIPTYPE: timelapse\nM622.1 S1 ; for prev firmware, default turned on\nM1002 judge_flag timelapse_record_flag\nM622 J1\nG92 E0\nG1 Z{max_layer_z + 0.4}\nG1 X0 Y{first_layer_center_no_wipe_tower[1]} F18000 ; move to safe pos\nG1 X-48.2 F3000 ; move to safe pos\nM400\nM1004 S5 P1  ; external shutter\nM400 P300\nM971 S11 C11 O0\nG92 E0\nG1 X0 F18000\nM623\n\n; SKIPTYPE: head_wrap_detect\nM622.1 S1\nM1002 judge_flag g39_3rd_layer_detect_flag\nM622 J1\n    ; enable nozzle clog detect at 3rd layer\n    {if layer_num == 2}\n      M400\n      G90\n      M83\n      M204 S5000\n      G0 Z2 F4000\n      G0 X261 Y250 F20000\n      M400 P200\n      G39 S1\n      G0 Z2 F4000\n    {endif}\n\n\n    M622.1 S1\n    M1002 judge_flag g39_detection_flag\n    M622 J1\n      {if !in_head_wrap_detect_zone}\n        M622.1 S0\n        M1002 judge_flag g39_mass_exceed_flag\n        M622 J1\n        {if layer_num > 2}\n            G392 S0\n            M400\n            G90\n            M83\n            M204 S5000\n            G0 Z{max_layer_z + 0.4} F4000\n            G39.3 S1\n            G0 Z{max_layer_z + 0.4} F4000\n            G392 S0\n          {endif}\n        M623\n    {endif}\n    M623\nM623\n; SKIPPABLE_END\n{endif}\n","timelapse_type":"0","top_area_threshold":"200%","top_color_penetration_layers":"4","top_one_wall_type":"not apply","top_shell_layers":"3","top_shell_thickness":"0.6","top_solid_infill_flow_ratio":["1"],"top_surface_acceleration":["5000"],"top_surface_density":"100%","top_surface_jerk":"9","top_surface_line_width":"0.3","top_surface_pattern":"monotonicline","top_surface_speed":["200"],"top_z_overrides_xy_distance":"0","travel_acceleration":["12000"],"travel_jerk":"12","travel_short_distance_acceleration":["250"],"travel_speed":["500"],"travel_speed_z":["0"],"tree_support_branch_angle":"45","tree_support_branch_diameter":"2","tree_support_branch_diameter_angle":"5","tree_support_branch_distance":"5","tree_support_tip_diameter":"0.8","tree_support_wall_count":"1","upward_compatible_machine":["Bambu Lab H2D 0.4 nozzle","Bambu Lab H2D Pro 0.4 nozzle","Bambu Lab H2S 0.4 nozzle","Bambu Lab P2S 0.4 nozzle","Bambu Lab H2C 0.4 nozzle","Bambu Lab X2D 0.4 nozzle","Bambu Lab A2L 0.4 nozzle","Bambu Lab H3C 0.4 nozzle"],"use_firmware_retraction":"0","use_relative_e_distances":"1","version":"02.09.01.70","vertical_shell_speed":["80%"],"volumetric_speed_coefficients":["0 0 0 0 0 0","0 0 0 0 0 0"],"wall_distribution_count":"1","wall_filament":"0","wall_generator":"arachne","wall_loops":"1","wall_sequence":"inner wall/outer wall","wall_transition_angle":"10","wall_transition_filter_deviation":"25%","wall_transition_length":"100%","wipe":["1"],"wipe_distance":["2"],"wipe_speed":"80%","wipe_tower_no_sparse_layers":"0","wipe_tower_rotation_angle":"0","wipe_tower_x":["15","14.9999"],"wipe_tower_y":["220.697","220.697"],"wrapping_detection_gcode":"","wrapping_detection_layers":"20","wrapping_exclude_area":[],"xy_contour_compensation":"0","xy_hole_compensation":"0","z_direction_outwall_speed_continuous":"0","z_hop":["0.4"],"z_hop_types":["Auto Lift"]};</script>
+<script>// ===== Motor PNG -> chaveiro em camadas (3MF Bambu) =====
+// Funciona no navegador e no Node (para testes). Depende de earcut (global ou require).
+(function (root) {
+  'use strict';
+  const EARCUT = (typeof earcut !== 'undefined') ? earcut : (typeof require !== 'undefined' ? require('earcut') : null);
+
+  // ---------- util ----------
+  function hex(rgb) { return '#' + rgb.map(v => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase(); }
+  function lum(rgb) { return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]; }
+
+  // ---------- 1. análise / quantização ----------
+  // img: {width,height,data(RGBA)}
+  function analyze(img, opt) {
+    opt = opt || {};
+    // reduz para no máx. 900px
+    const maxDim = 900;
+    let { width: w, height: h, data } = img;
+    let sc = Math.min(1, maxDim / Math.max(w, h));
+    let W = Math.max(1, Math.round(w * sc)), H = Math.max(1, Math.round(h * sc));
+    const px = new Float32Array(W * H * 4);
+    // reamostragem por média de área (box)
+    for (let y = 0; y < H; y++) {
+      const y0 = Math.floor(y / sc), y1 = Math.min(h, Math.max(y0 + 1, Math.floor((y + 1) / sc)));
+      for (let x = 0; x < W; x++) {
+        const x0 = Math.floor(x / sc), x1 = Math.min(w, Math.max(x0 + 1, Math.floor((x + 1) / sc)));
+        let r = 0, g = 0, b = 0, a = 0, n = 0;
+        for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) {
+          const i = (yy * w + xx) * 4, al = data[i + 3];
+          r += data[i] * al; g += data[i + 1] * al; b += data[i + 2] * al; a += al; n++;
+        }
+        const o = (y * W + x) * 4;
+        if (a > 0) { px[o] = r / a; px[o + 1] = g / a; px[o + 2] = b / a; }
+        px[o + 3] = a / n;
+      }
+    }
+    // fundo
+    let hasAlpha = false;
+    for (let i = 3; i < px.length; i += 4) if (px[i] < 250) { hasAlpha = true; break; }
+    const opaque = new Uint8Array(W * H);
+    let bgColor = null;
+    if (hasAlpha) {
+      for (let i = 0; i < W * H; i++) opaque[i] = px[i * 4 + 3] >= 128 ? 1 : 0;
+    } else if (opt.removeBg !== false) {
+      // cor média dos cantos
+      const cs = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]];
+      bgColor = [0, 0, 0];
+      cs.forEach(([x, y]) => { const o = (y * W + x) * 4; bgColor[0] += px[o] / 4; bgColor[1] += px[o + 1] / 4; bgColor[2] += px[o + 2] / 4; });
+      const tol = (opt.bgTol || 40) ** 2;
+      // flood fill a partir das bordas (só remove fundo conectado à borda)
+      const st = [];
+      const isBg = i => { const o = i * 4; const d = (px[o] - bgColor[0]) ** 2 + (px[o + 1] - bgColor[1]) ** 2 + (px[o + 2] - bgColor[2]) ** 2; return d <= tol; };
+      opaque.fill(1);
+      for (let x = 0; x < W; x++) { st.push(x, (H - 1) * W + x); }
+      for (let y = 0; y < H; y++) { st.push(y * W, y * W + W - 1); }
+      while (st.length) {
+        const i = st.pop();
+        if (!opaque[i] || !isBg(i)) continue;
+        opaque[i] = 0;
+        const x = i % W, y = (i / W) | 0;
+        if (x > 0) st.push(i - 1); if (x < W - 1) st.push(i + 1);
+        if (y > 0) st.push(i - W); if (y < H - 1) st.push(i + W);
+      }
+    } else opaque.fill(1);
+
+    // amostras: só pixels "estáveis" (miolo das cores, sem a mistura das bordas)
+    const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+    const idx = [];
+    for (let i = 0; i < W * H; i++) if (opaque[i]) idx.push(i);
+    if (!idx.length) throw new Error('Imagem sem área visível (tudo transparente/fundo).');
+    const stable = [];
+    const pc = i => [px[i * 4], px[i * 4 + 1], px[i * 4 + 2]];
+    for (const i of idx) {
+      const x = i % W, y = (i / W) | 0; if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+      const c = pc(i); let ok = true;
+      for (const n of [i - 1, i + 1, i - W, i + W, i - W - 1, i - W + 1, i + W - 1, i + W + 1]) if (!opaque[n] || d2(c, pc(n)) > 900) { ok = false; break; }
+      if (ok) stable.push(i);
+    }
+    const base = stable.length > idx.length * 0.05 ? stable : idx;
+    const step = Math.max(1, Math.floor(base.length / 60000));
+    const S = [];
+    for (let j = 0; j < base.length; j += step) S.push(pc(base[j]));
+
+    // candidatos por histograma (16 níveis por canal)
+    const bins = new Map();
+    S.forEach(c => { const key = ((c[0] >> 4) << 8) | ((c[1] >> 4) << 4) | (c[2] >> 4); let b = bins.get(key); if (!b) bins.set(key, b = [0, 0, 0, 0]); b[0] += c[0]; b[1] += c[1]; b[2] += c[2]; b[3]++; });
+    let cand = [...bins.values()].map(b => ({ c: [b[0] / b[3], b[1] / b[3], b[2] / b[3]], n: b[3] })).sort((a, b) => b.n - a.n);
+    const minN = Math.max(3, S.length * (opt.minShare ?? 0.002));
+    const MD = (opt.mergeDist || 34) ** 2;
+    const picked = [];
+    for (const q of cand) {
+      const near = picked.find(p => d2(p.c, q.c) < MD);
+      if (near) { const t = near.n + q.n; near.c = near.c.map((v, k) => (v * near.n + q.c[k] * q.n) / t); near.n = t; }
+      else picked.push({ c: q.c.slice(), n: q.n });
+    }
+    let cent = picked.filter(p => p.n >= minN).sort((a, b) => b.n - a.n).map(p => p.c);
+    if (!cent.length) cent = [picked[0].c];
+    // refina (k-means curto)
+    for (let it = 0; it < 8; it++) {
+      const acc = cent.map(() => [0, 0, 0, 0]);
+      S.forEach(s => { let bi = 0, bd = 1e18; cent.forEach((c, ci) => { const d = d2(s, c); if (d < bd) { bd = d; bi = ci; } }); const a = acc[bi]; a[0] += s[0]; a[1] += s[1]; a[2] += s[2]; a[3]++; });
+      cent = cent.map((c, ci) => acc[ci][3] ? [acc[ci][0] / acc[ci][3], acc[ci][1] / acc[ci][3], acc[ci][2] / acc[ci][3]] : c);
+    }
+    // quantidade escolhida pelo usuário: mantém as k mais presentes
+    if (opt.k && cent.length > opt.k) {
+      const cnt = cent.map(() => 0);
+      S.forEach(s => { let bi = 0, bd = 1e18; cent.forEach((c, ci) => { const d = d2(s, c); if (d < bd) { bd = d; bi = ci; } }); cnt[bi]++; });
+      cent = cent.map((c, i) => [c, cnt[i]]).sort((a, b) => b[1] - a[1]).slice(0, opt.k).map(a => a[0]);
+    }
+    // rótulos
+    let labels = new Int16Array(W * H).fill(-1);
+    for (let i = 0; i < W * H; i++) if (opaque[i]) {
+      const o = i * 4, s = [px[o], px[o + 1], px[o + 2]];
+      let bi = 0, bd = 1e18; cent.forEach((c, ci) => { const d = d2(s, c); if (d < bd) { bd = d; bi = ci; } });
+      labels[i] = bi;
+    }
+    labels = modeFilter(labels, W, H, 2);
+    const counts = new Array(cent.length).fill(0);
+    labels.forEach(l => { if (l >= 0) counts[l]++; });
+    // remove cores vazias
+    const keep = cent.map((c, i) => i).filter(i => counts[i] > 0);
+    const remap = new Int16Array(cent.length).fill(-1); keep.forEach((i, j) => remap[i] = j);
+    for (let i = 0; i < labels.length; i++) if (labels[i] >= 0) labels[i] = remap[labels[i]];
+    const palette = keep.map(i => ({ rgb: cent[i].map(Math.round), hex: hex(cent[i]), count: counts[i] }));
+    // furos internos (áreas transparentes cercadas pelo desenho, ex.: miolo do B, do O, do A)
+    {
+      const out = new Uint8Array(W * H), st = [];
+      for (let x = 0; x < W; x++) st.push(x, (H - 1) * W + x);
+      for (let y = 0; y < H; y++) st.push(y * W, y * W + W - 1);
+      while (st.length) { const i = st.pop(); if (out[i] || labels[i] >= 0) continue; out[i] = 1; const x = i % W, y = (i / W) | 0;
+        if (x > 0) st.push(i - 1); if (x < W - 1) st.push(i + 1); if (y > 0) st.push(i - W); if (y < H - 1) st.push(i + W); }
+      let nh = 0; for (let i = 0; i < W * H; i++) if (labels[i] < 0 && !out[i]) nh++;
+      if (nh > 0) {
+        const hi = palette.length;
+        for (let i = 0; i < W * H; i++) if (labels[i] < 0 && !out[i]) labels[i] = hi;
+        const tot = labels.reduce((a, l) => a + (l >= 0 ? 1 : 0), 0);
+        palette.push({ rgb: [0, 0, 0], hex: '#000000', count: nh, hole: true, holeShare: nh / tot });
+      }
+    }
+    return { W, H, labels, palette, hasAlpha, bgColor: bgColor && hex(bgColor) };
+  }
+
+  function modeFilter(lab, W, H, passes) {
+    let a = lab;
+    for (let p = 0; p < passes; p++) {
+      const b = new Int16Array(a);
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x; if (a[i] < 0) continue;
+        const cnt = {}; let best = a[i], bc = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const l = a[i + dy * W + dx]; if (l < 0) continue;
+          cnt[l] = (cnt[l] || 0) + 1; if (cnt[l] > bc) { bc = cnt[l]; best = l; }
+        }
+        if (bc >= 5) b[i] = best;
+      }
+      a = b;
+    }
+    return a;
+  }
+
+  // remove ilhas pequenas (reatribui ao vizinho mais comum)
+  function removeIslands(lab, W, H, minPx, keep) {
+    const seen = new Uint8Array(W * H);
+    const q = new Int32Array(W * H);
+    for (let s = 0; s < W * H; s++) {
+      if (seen[s] || lab[s] < 0) continue;
+      const L = lab[s]; let qh = 0, qt = 0; q[qt++] = s; seen[s] = 1;
+      const nb = {};
+      while (qh < qt) {
+        const i = q[qh++], x = i % W, y = (i / W) | 0;
+        const ns = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1];
+        for (const n of ns) {
+          if (n < 0) continue;
+          if (lab[n] === L) { if (!seen[n]) { seen[n] = 1; q[qt++] = n; } }
+          else if (lab[n] >= 0) nb[lab[n]] = (nb[lab[n]] || 0) + 1;
+        }
+      }
+      let prot = false; if (keep && keep.mask) for (let j = 0; j < qt; j++) if (keep.mask[q[j]]) { prot = true; break; }
+      if (qt < minPx && !prot && !(keep && keep.has(L))) {
+        let best = -1, bc = 0; for (const k in nb) if (nb[k] > bc) { bc = nb[k]; best = +k; }
+        if (best >= 0) for (let j = 0; j < qt; j++) lab[q[j]] = best;
+      }
+    }
+    return lab;
+  }
+
+  // ---------- campos ----------
+  function blur(f, W, H, sigma) {
+    if (sigma <= 0.01) return f;
+    const r = Math.ceil(sigma * 3), k = []; let s = 0;
+    for (let i = -r; i <= r; i++) { const v = Math.exp(-i * i / (2 * sigma * sigma)); k.push(v); s += v; }
+    for (let i = 0; i < k.length; i++) k[i] /= s;
+    const t = new Float32Array(W * H), o = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let a = 0; for (let j = -r; j <= r; j++) { const xx = Math.min(W - 1, Math.max(0, x + j)); a += f[y * W + xx] * k[j + r]; } t[y * W + x] = a;
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let a = 0; for (let j = -r; j <= r; j++) { const yy = Math.min(H - 1, Math.max(0, y + j)); a += t[yy * W + x] * k[j + r]; } o[y * W + x] = a;
+    }
+    return o;
+  }
+  // distância euclidiana (Felzenszwalb) até o pixel "inside" mais próximo
+  function edt(inside, W, H) {
+    const INF = 1e20, f = new Float64Array(Math.max(W, H)), d = new Float64Array(W * H);
+    for (let i = 0; i < W * H; i++) d[i] = inside[i] ? 0 : INF;
+    const v = new Int32Array(Math.max(W, H)), z = new Float64Array(Math.max(W, H) + 1), out = new Float64Array(Math.max(W, H));
+    function pass(n, get, set) {
+      for (let i = 0; i < n; i++) f[i] = get(i);
+      let k = 0; v[0] = 0; z[0] = -INF; z[1] = INF;
+      for (let q = 1; q < n; q++) {
+        let s;
+        while (true) { const p = v[k]; s = ((f[q] + q * q) - (f[p] + p * p)) / (2 * q - 2 * p); if (s <= z[k]) { k--; if (k < 0) { k = 0; break; } } else break; }
+        k++; v[k] = q; z[k] = s; z[k + 1] = INF;
+      }
+      k = 0;
+      for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; const p = v[k]; out[q] = (q - p) * (q - p) + f[p]; }
+      for (let i = 0; i < n; i++) set(i, out[i]);
+    }
+    for (let x = 0; x < W; x++) pass(H, i => d[i * W + x], (i, val) => d[i * W + x] = val);
+    for (let y = 0; y < H; y++) pass(W, i => d[y * W + i], (i, val) => d[y * W + i] = val);
+    const r = new Float32Array(W * H); for (let i = 0; i < W * H; i++) r[i] = Math.sqrt(d[i]); return r;
+  }
+
+  // ---------- marching squares ----------
+  function contours(F, W, H, iso) {
+    // força borda externa como "fora"
+    const val = (x, y) => (x <= 0 || y <= 0 || x >= W - 1 || y >= H - 1) ? -1e9 : F[y * W + x] - iso;
+    const pts = new Map(); // edgeId -> [x,y]
+    const next = new Map();
+    const eH = (x, y) => 2 * (y * W + x), eV = (x, y) => 2 * (y * W + x) + 1;
+    function ept(id) {
+      if (pts.has(id)) return; const base = id >> 1, x = base % W, y = (base / W) | 0;
+      let x2 = x, y2 = y; if (id & 1) y2++; else x2++;
+      const v0 = val(x, y), v1 = val(x2, y2);
+      let t = v0 / (v0 - v1); if (!isFinite(t)) t = 0.5; t = Math.min(0.999, Math.max(0.001, t));
+      pts.set(id, [x + (x2 - x) * t, y + (y2 - y) * t]);
+    }
+    for (let y = 0; y < H - 1; y++) for (let x = 0; x < W - 1; x++) {
+      const a = val(x, y) > 0, b = val(x + 1, y) > 0, c = val(x + 1, y + 1) > 0, d = val(x, y + 1) > 0;
+      const cs = (a ? 8 : 0) | (b ? 4 : 0) | (c ? 2 : 0) | (d ? 1 : 0);
+      if (cs === 0 || cs === 15) continue;
+      const T = eH(x, y), R = eV(x + 1, y), B = eH(x, y + 1), L = eV(x, y);
+      let segs;
+      const center = (val(x, y) + val(x + 1, y) + val(x + 1, y + 1) + val(x, y + 1)) > 0;
+      switch (cs) {
+        case 1: segs = [[L, B]]; break; case 2: segs = [[B, R]]; break; case 3: segs = [[L, R]]; break;
+        case 4: segs = [[T, R]]; break; case 6: segs = [[T, B]]; break; case 7: segs = [[T, L]]; break;
+        case 8: segs = [[T, L]]; break; case 9: segs = [[T, B]]; break; case 11: segs = [[T, R]]; break;
+        case 12: segs = [[L, R]]; break; case 13: segs = [[R, B]]; break; case 14: segs = [[L, B]]; break;
+        case 5: segs = center ? [[T, L], [R, B]] : [[T, R], [L, B]]; break;
+        case 10: segs = center ? [[T, R], [L, B]] : [[T, L], [R, B]]; break;
+      }
+      const corners = [[x, y, a], [x + 1, y, b], [x + 1, y + 1, c], [x, y + 1, d]];
+      for (let [p, q] of segs) {
+        ept(p); ept(q);
+        const P = pts.get(p), Q = pts.get(q);
+        const mx = (P[0] + Q[0]) / 2, my = (P[1] + Q[1]) / 2;
+        let best = null, bd = 1e9;
+        for (const cn of corners) { const dd = (cn[0] - mx) ** 2 + (cn[1] - my) ** 2; if (dd < bd) { bd = dd; best = cn; } }
+        const cr = (Q[0] - P[0]) * (best[1] - my) - (Q[1] - P[1]) * (best[0] - mx);
+        if ((cr > 0) !== best[2]) { const t = p; p = q; q = t; }
+        next.set(p, q);
+      }
+    }
+    const loops = [], used = new Set();
+    for (const s of next.keys()) {
+      if (used.has(s)) continue;
+      const loop = []; let e = s, guard = 0;
+      while (!used.has(e) && guard++ < 1e7) { used.add(e); loop.push(pts.get(e)); e = next.get(e); if (e === undefined) break; }
+      if (loop.length >= 3) loops.push(loop);
+    }
+    return loops;
+  }
+
+  function area(l) { let a = 0; for (let i = 0, j = l.length - 1; i < l.length; j = i++) a += (l[j][0] - l[i][0]) * (l[j][1] + l[i][1]); return a / 2; } // >0 = CCW (y para cima)
+  function rdp(pts, eps) {
+    if (pts.length < 8) return pts;
+    // laço fechado: divide em duas metades
+    const n = pts.length, keep = new Uint8Array(n); keep[0] = 1;
+    let far = 0, fd = -1; for (let i = 1; i < n; i++) { const d = (pts[i][0] - pts[0][0]) ** 2 + (pts[i][1] - pts[0][1]) ** 2; if (d > fd) { fd = d; far = i; } }
+    keep[far] = 1;
+    const st = [[0, far], [far, n]];
+    while (st.length) {
+      const [s, e] = st.pop(); const A = pts[s], B = pts[e % n];
+      const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy) || 1e-9;
+      let mi = -1, md = eps;
+      for (let i = s + 1; i < e; i++) { const d = Math.abs(dy * pts[i][0] - dx * pts[i][1] + B[0] * A[1] - B[1] * A[0]) / L; if (d > md) { md = d; mi = i; } }
+      if (mi >= 0) { keep[mi] = 1; st.push([s, mi], [mi, e]); }
+    }
+    const o = []; for (let i = 0; i < n; i++) if (keep[i]) o.push(pts[i]); return o;
+  }
+  function pip(pt, poly) {
+    let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      if (((a[1] > pt[1]) !== (b[1] > pt[1])) && (pt[0] < (b[0] - a[0]) * (pt[1] - a[1]) / (b[1] - a[1]) + a[0])) c = !c;
+    } return c;
+  }
+
+  // loops (mm, y para cima) -> polígonos [{outer, holes}]
+  function polygons(loops) {
+    loops = loops.filter(l => Math.abs(area(l)) > 0.02);
+    if (!loops.length) return [];
+    let big = loops[0]; loops.forEach(l => { if (Math.abs(area(l)) > Math.abs(area(big))) big = l; });
+    const outerSign = Math.sign(area(big));
+    const outers = [], holes = [];
+    loops.forEach(l => { const a = area(l); (Math.sign(a) === outerSign ? outers : holes).push({ l, a: Math.abs(a), bb: bbox(l) }); });
+    outers.forEach(o => { if (area(o.l) < 0) o.l.reverse(); o.holes = []; });
+    outers.sort((p, q) => p.a - q.a);
+    holes.forEach(h => {
+      if (area(h.l) > 0) h.l.reverse();
+      const p = h.l[0];
+      for (const o of outers) {
+        if (o.a <= h.a) continue;
+        if (p[0] < o.bb[0] || p[0] > o.bb[2] || p[1] < o.bb[1] || p[1] > o.bb[3]) continue;
+        if (pip(p, o.l)) { o.holes.push(h.l); return; }
+      }
+    });
+    return outers.map(o => ({ outer: o.l, holes: o.holes }));
+  }
+  function bbox(l) { let a = [1e9, 1e9, -1e9, -1e9]; l.forEach(p => { a[0] = Math.min(a[0], p[0]); a[1] = Math.min(a[1], p[1]); a[2] = Math.max(a[2], p[0]); a[3] = Math.max(a[3], p[1]); }); return a; }
+
+  // extrusão
+  function extrude(polys, z0, z1, mesh) {
+    const V = mesh.v, T = mesh.t;
+    for (const P of polys) {
+      const rings = [P.outer, ...P.holes];
+      const flat = [], holeIdx = [];
+      const base = V.length / 3; let n = 0;
+      rings.forEach((r, ri) => { if (ri) holeIdx.push(n); r.forEach(p => { flat.push(p[0], p[1]); n++; }); });
+      for (let i = 0; i < n; i++) V.push(flat[2 * i], flat[2 * i + 1], z0);
+      for (let i = 0; i < n; i++) V.push(flat[2 * i], flat[2 * i + 1], z1);
+      const tri = EARCUT(flat, holeIdx.length ? holeIdx : null, 2);
+      for (let i = 0; i < tri.length; i += 3) {
+        let a = tri[i], b = tri[i + 1], c = tri[i + 2];
+        const cr = (flat[2 * b] - flat[2 * a]) * (flat[2 * c + 1] - flat[2 * a + 1]) - (flat[2 * b + 1] - flat[2 * a + 1]) * (flat[2 * c] - flat[2 * a]);
+        if (cr < 0) { const t = b; b = c; c = t; }
+        T.push(base + n + a, base + n + b, base + n + c); // topo (CCW)
+        T.push(base + a, base + c, base + b);           // fundo
+      }
+      let off = 0;
+      rings.forEach(r => {
+        const m = r.length;
+        for (let i = 0; i < m; i++) {
+          const a0 = base + off + i, b0 = base + off + (i + 1) % m, a1 = a0 + n, b1 = b0 + n;
+          T.push(a0, b0, b1, a0, b1, a1);
+        }
+        off += m;
+      });
+    }
+  }
+
+  function nomeHex(h) { return h.toUpperCase(); }
+  // ---------- 2. construção ----------
+  // A: resultado de analyze; p: parâmetros
+  // p.roles[i] = 'base' | 'relevo' ; p.order = índices de relevo (de baixo p/ cima)
+  function build(A, p) {
+    const { W: sw, H: sh } = A;
+    let lab = new Int16Array(A.labels);
+    // bbox do conteúdo
+    let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) if (lab[y * sw + x] >= 0) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+    const mmPerSrc = p.size / Math.max(cw, ch); // tamanho = maior lado do desenho (sem argola)
+    const keepL = new Set(A.palette.map((q, i) => (q.user || q.hole) ? i : -1).filter(i => i >= 0)); keepL.mask = A.prot;
+    lab = removeIslands(lab, sw, sh, Math.max(2, Math.round(p.minArea / (mmPerSrc * mmPerSrc))), keepL);
+
+    const ringOn = p.ring !== 'none';
+    const pad = p.border + (ringOn ? p.ringD * 1.6 : 0) + 2;
+    const Wmm = cw * mmPerSrc + 2 * pad, Hmm = ch * mmPerSrc + 2 * pad;
+    const R = Math.min(12, 1400 / Math.max(Wmm, Hmm)); // px por mm
+    const GW = Math.ceil(Wmm * R), GH = Math.ceil(Hmm * R);
+    const K = A.palette.length;
+    // amostragem bilinear dos one-hot
+    const fields = [];
+    const toSrc = (gx, gy) => [x0 + ((gx + 0.5) / R - pad) / mmPerSrc - 0.5, y0 + ((gy + 0.5) / R - pad) / mmPerSrc - 0.5];
+    const sigma = Math.max(0.8, 0.45 * R * mmPerSrc);
+    for (let c = 0; c < K; c++) {
+      const f = new Float32Array(GW * GH);
+      for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+        const [sx, sy] = toSrc(gx, gy);
+        const ix = Math.floor(sx), iy = Math.floor(sy), fx = sx - ix, fy = sy - iy;
+        const g = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh) ? 0 : (lab[y * sw + x] === c ? 1 : 0);
+        f[gy * GW + gx] = g(ix, iy) * (1 - fx) * (1 - fy) + g(ix + 1, iy) * fx * (1 - fy) + g(ix, iy + 1) * (1 - fx) * fy + g(ix + 1, iy + 1) * fx * fy;
+      }
+      fields.push(blur(f, GW, GH, sigma));
+    }
+    // silhueta
+    const sil = new Float32Array(GW * GH);
+    for (let c = 0; c < K; c++) { if (p.roles[c] === 'vazado') continue; const f = fields[c]; for (let i = 0; i < sil.length; i++) sil[i] += f[i]; }
+    const inside = new Uint8Array(GW * GH); for (let i = 0; i < sil.length; i++) inside[i] = sil[i] > 0.5 ? 1 : 0;
+    const dOut = edt(inside, GW, GH);
+    const bpx = p.border * R;
+    const baseF = new Float32Array(GW * GH);
+    for (let i = 0; i < baseF.length; i++) baseF[i] = Math.max((sil[i] - 0.5) * 2, bpx > 0 ? (bpx - dOut[i] + 0.5) : -1e9);
+    // áreas marcadas como "Vazado" viram furo de verdade (a borda não preenche)
+    for (let c = 0; c < K; c++) if (p.roles[c] === 'vazado') { const f = fields[c]; for (let i = 0; i < baseF.length; i++) baseF[i] = Math.min(baseF[i], (0.5 - f[i]) * 2); }
+
+    // argola
+    let ring = null;
+    if (ringOn) {
+      const ang = { top: 90, 'top-left': 135, 'top-right': 45, left: 180, right: 0 }[p.ring] ?? 90; // 'custom' usa o topo como reserva
+      const dx = Math.cos(ang * Math.PI / 180), dy = -Math.sin(ang * Math.PI / 180); // y da grade p/ baixo
+      let cx = 0, cy = 0, n = 0;
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (baseF[y * GW + x] > 0) { cx += x; cy += y; n++; }
+      cx /= n; cy /= n;
+      let t = 0, last = 0; const maxT = Math.hypot(GW, GH);
+      while (t < maxT) { const x = Math.round(cx + dx * t), y = Math.round(cy + dy * t); if (x < 0 || y < 0 || x >= GW || y >= GH) break; if (baseF[y * GW + x] > 0) last = t; t += 0.5; }
+      const rR = p.ringD / 2 * R, hR = p.holeD / 2 * R;
+      const ex = cx + dx * last, ey = cy + dy * last;
+      let Cx = ex + dx * rR, Cy = ey + dy * rR;
+      let Sx = ex - dx * (1.5 * R + rR * 0.3), Sy = ey - dy * (1.5 * R + rR * 0.3);
+      if (p.ring === 'custom' && p.ringAt) {
+        // posição escolhida pelo usuário (coordenadas da imagem) -> grade
+        Cx = ((p.ringAt[0] - x0 + 0.5) * mmPerSrc + pad) * R - 0.5;
+        Cy = ((p.ringAt[1] - y0 + 0.5) * mmPerSrc + pad) * R - 0.5;
+        Cx = Math.max(rR + 1, Math.min(GW - rR - 2, Cx)); Cy = Math.max(rR + 1, Math.min(GH - rR - 2, Cy));
+        // ponto mais próximo do desenho, para a "ponte" da argola
+        let bd = 1e18, Ex = Cx, Ey = Cy;
+        for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (baseF[y * GW + x] > 0) { const d = (x - Cx) ** 2 + (y - Cy) ** 2; if (d < bd) { bd = d; Ex = x; Ey = y; } }
+        const dl = Math.sqrt(bd);
+        if (dl < 0.5) { Sx = Cx + 0.01; Sy = Cy; }
+        else { const ux = (Ex - Cx) / dl, uy = (Ey - Cy) / dl; Sx = Ex + ux * (1.5 * R + rR * 0.3); Sy = Ey + uy * (1.5 * R + rR * 0.3); }
+      }
+      ring = { Cx, Cy, rR, hR };
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+        // cápsula
+        const vx = Sx - Cx, vy = Sy - Cy, L2 = vx * vx + vy * vy;
+        let tt = ((x - Cx) * vx + (y - Cy) * vy) / L2; tt = Math.max(0, Math.min(1, tt));
+        const dc = Math.hypot(x - (Cx + vx * tt), y - (Cy + vy * tt));
+        const i = y * GW + x;
+        baseF[i] = Math.max(baseF[i], rR - dc);
+      }
+    }
+    const holeCut = (F) => { if (!ring) return; for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) { const i = y * GW + x; F[i] = Math.min(F[i], Math.hypot(x - ring.Cx, y - ring.Cy) - ring.hR); } };
+    holeCut(baseF);
+
+    // grade -> mm (centrado)
+    let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9;
+    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (baseF[y * GW + x] > 0) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
+    const ocx = (bx0 + bx1) / 2, ocy = (by0 + by1) / 2;
+    const toMM = l => l.map(([x, y]) => [(x - ocx) / R, -(y - ocy) / R]);
+    const shape = F => polygons(contours(F, GW, GH, 0).map(l => rdp(toMM(l), 0.015)));
+
+    // camadas / alturas
+    const L = p.layer;
+    const snap = v => Math.max(L, Math.round(v / L) * L);
+    const B = snap(p.baseH);
+    const reliefs = p.order.filter(i => p.roles[i] === 'relevo');
+    const nR = reliefs.length;
+    // altura de cada cor (mm), arredondada para múltiplo da camada
+    const hOf = ci => snap((p.heights && p.heights[ci]) || 2 * L);
+    const zs = {}; let acc = B;
+    reliefs.forEach(ci => { const h = hOf(ci); if (p.mode === 'camadas') { zs[ci] = [acc, acc + h]; acc += h; } else zs[ci] = [B, B + h]; });
+    const step = null;
+
+    // slots de filamento (cores iguais = mesmo slot)
+    const slotHex = []; const slotOf = h => { h = h.toUpperCase(); let i = slotHex.indexOf(h); if (i < 0) { slotHex.push(h); i = slotHex.length - 1; } return i + 1; };
+    const baseSlot = slotOf(p.baseColor);
+
+    const parts = [];
+    const relF = reliefs.map(ci => { const F = new Float32Array(fields[ci]); for (let i = 0; i < F.length; i++) F[i] -= p.overlap; holeCut(F); return F; });
+    const N = GW * GH;
+    const sdf = F => { const m = new Uint8Array(N), nm = new Uint8Array(N); for (let i = 0; i < N; i++) { m[i] = F[i] > 0 ? 1 : 0; nm[i] = 1 - m[i]; } const dO = edt(m, GW, GH), dI = edt(nm, GW, GH); const o = new Float32Array(N); for (let i = 0; i < N; i++) o[i] = m[i] ? dI[i] - 0.5 : 0.5 - dO[i]; return o; };
+    const hx = ci => A.palette[ci].hex;
+    let T = B; reliefs.forEach(ci => T = Math.max(T, zs[ci][1]));
+    if (p.mode === 'encaixe') {
+      // base com rebaixos; peças separadas com folga, topo tudo nivelado em T
+      const maxH = Math.max(L, ...reliefs.map(ci => hOf(ci)));
+      T = B + maxH;
+      const c2 = (p.clear || 0) / 2 * R;
+      const bHex = p.baseColor.toUpperCase();
+      const pockets = reliefs.map((ci, k) => ({ ci, k })).filter(o => hx(o.ci).toUpperCase() !== bHex).map(({ ci, k }) => { const sd = sdf(relF[k]); return { ci, floor: T - hOf(ci), F: sd.map(v => v + c2), piece: sd.map(v => v - c2) }; });
+      const levels = [...new Set(pockets.map(q => +q.floor.toFixed(4)))].sort((a, b) => a - b);
+      const baseMesh = { v: [], t: [] };
+      const zb = [...new Set([0, ...pockets.map(q => +q.floor.toFixed(4)), +T.toFixed(4)])].sort((a, b) => a - b);
+      const slab = (z0, z1, active) => { const F = new Float32Array(baseF); active.forEach(q => { for (let i = 0; i < N; i++) F[i] = Math.min(F[i], -q.F[i]); }); extrude(shape(F), z0, z1, baseMesh); };
+      for (let i = 0; i + 1 < zb.length; i++) slab(zb[i], zb[i + 1], pockets.filter(q => q.floor <= zb[i] + 1e-6));
+      // base + molde do encaixe = uma peça só
+      parts.push({ name: 'Base', hex: p.baseColor.toUpperCase(), slot: slotOf(p.baseColor), mesh: baseMesh, z0: 0, z1: T, obj: 0, lvl: 0 });
+      pockets.forEach((q, k) => {
+        const m = { v: [], t: [] }; extrude(shape(q.piece), q.floor, T, m);
+        parts.push({ name: 'Peça ' + nomeHex(hx(q.ci)), hex: hx(q.ci), slot: slotOf(hx(q.ci)), mesh: m, z0: q.floor, z1: T, ci: q.ci, obj: k + 1, lvl: k + 1 });
+        zs[q.ci] = [q.floor, T];
+      });
+    } else {
+      const baseMesh = { v: [], t: [] };
+      extrude(shape(baseF), 0, B, baseMesh);
+      parts.push({ name: 'Base', hex: p.baseColor.toUpperCase(), slot: baseSlot, mesh: baseMesh, z0: 0, z1: B, lvl: 0 });
+      if (p.mode === 'partes' && p.flush && T > B) {
+        // borda sobe até a altura das cores (topo nivelado)
+        const F = new Float32Array(baseF); relF.forEach(R2 => { for (let i = 0; i < N; i++) F[i] = Math.min(F[i], -R2[i]); });
+        extrude(shape(F), B, T, baseMesh); parts[0].z1 = T; parts[0].name = 'Base + borda';
+      }
+      reliefs.forEach((ci, k) => {
+        const m = { v: [], t: [] };
+        if (p.mode === 'partes' && p.flush) zs[ci] = [B, T]; // nivelado: todas as cores terminam na mesma altura
+        extrude(shape(relF[k]), B, zs[ci][1], m);
+        parts.push({ name: 'Cor ' + (k + 1) + ' ' + hx(ci), hex: hx(ci), slot: slotOf(hx(ci)), mesh: m, z0: zs[ci][0], z1: zs[ci][1], ci, lvl: k + 1 });
+      });
+    }
+    const pauses = [];
+    if (p.mode === 'camadas') {
+      let prev = baseSlot;
+      reliefs.forEach((ci, k) => {
+        const zStart = zs[ci][0]; // a cor começa nesta altura
+        const sl = slotOf(A.palette[ci].hex);
+        if (sl === prev) return;
+        const topZ = +(zStart + L).toFixed(4);
+        pauses.push({ topZ, layer: Math.round(topZ / L), slot: sl, hex: A.palette[ci].hex, ci });
+        prev = sl;
+      });
+    }
+    const totalH = Math.max(...parts.map(q => q.z1));
+    const dims = [(bx1 - bx0) / R, (by1 - by0) / R, totalH];
+
+    // pré-visualização (vista de cima) em RGBA
+    const prev = new Uint8ClampedArray(GW * GH * 4);
+    const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const bRgb = hexRgb(p.baseColor);
+    for (let i = 0; i < GW * GH; i++) {
+      if (baseF[i] <= 0) continue;
+      let col = bRgb, shade = 0.85;
+      for (let k = relF.length - 1; k >= 0; k--) if (relF[k][i] > 0) { col = A.palette[reliefs[k]].rgb; shade = 1; break; }
+      prev[i * 4] = col[0] * shade; prev[i * 4 + 1] = col[1] * shade; prev[i * 4 + 2] = col[2] * shade; prev[i * 4 + 3] = 255;
+    }
+    return { parts, pauses, slots: slotHex, B, zs, dims, totalH, preview: { w: GW, h: GH, data: prev }, mode: p.mode, layer: L,
+      map: { x0, y0, pad, mmPerSrc, R, GW, GH, sw, sh } };
+  }
+
+  // ---------- 3. saída ----------
+  function crc32(buf) {
+    let t = crc32.t; if (!t) { t = crc32.t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } }
+    let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = t[(c ^ buf[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zip(files) { // [{name, data:Uint8Array}] (store)
+    const enc = new TextEncoder(); const chunks = [], central = []; let off = 0;
+    for (const f of files) {
+      const nm = enc.encode(f.name), d = f.data, crc = crc32(d);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+      h.setUint16(10, 0, true); h.setUint16(12, 0x21, true); h.setUint32(14, crc, true); h.setUint32(18, d.length, true); h.setUint32(22, d.length, true);
+      h.setUint16(26, nm.length, true); h.setUint16(28, 0, true);
+      chunks.push(new Uint8Array(h.buffer), nm, d);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+      c.setUint16(12, 0, true); c.setUint16(14, 0x21, true); c.setUint32(16, crc, true); c.setUint32(20, d.length, true); c.setUint32(24, d.length, true);
+      c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+      central.push(new Uint8Array(c.buffer), nm);
+      off += 30 + nm.length + d.length;
+    }
+    const cs = central.reduce((a, b) => a + b.length, 0);
+    const e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cs, true); e.setUint32(16, off, true);
+    const all = [...chunks, ...central, new Uint8Array(e.buffer)];
+    const out = new Uint8Array(all.reduce((a, b) => a + b.length, 0)); let o = 0; all.forEach(a => { out.set(a, o); o += a.length; }); return out;
+  }
+  const f6 = v => (Math.round(v * 1e4) / 1e4).toString();
+  function meshXml(id, m) {
+    const s = [`  <object id="${id}" type="model">\n   <mesh>\n    <vertices>\n`];
+    for (let i = 0; i < m.v.length; i += 3) s.push(`     <vertex x="${f6(m.v[i])}" y="${f6(m.v[i + 1])}" z="${f6(m.v[i + 2])}"/>\n`);
+    s.push('    </vertices>\n    <triangles>\n');
+    for (let i = 0; i < m.t.length; i += 3) s.push(`     <triangle v1="${m.t[i]}" v2="${m.t[i + 1]}" v3="${m.t[i + 2]}"/>\n`);
+    s.push('    </triangles>\n   </mesh>\n  </object>\n');
+    return s.join('');
+  }
+  function uuid(n) { return ('00000000' + n.toString(16)).slice(-8) + '-61cb-4c03-9d28-80fed5dfa1dc'; }
+
+
+  // project_settings.config do Bambu com N filamentos (cores) a partir de um modelo de 2 filamentos
+  function projectConfig(tpl, colors, nPlates) {
+    const d = JSON.parse(JSON.stringify(tpl));
+    const T = (tpl.filament_colour || []).length || 2, N = colors.length;
+    const skip = k => /^machine_/.test(k) || ['start_end_points', 'extruder_ams_count', 'printable_area', 'head_wrap_detect_zone', 'upward_compatible_machine', 'bed_exclude_area', 'wrapping_exclude_area', 'extruder_printable_area', 'extruder_printable_height', 'post_process', 'bed_heat_soak_area', 'flush_multiplier', 'nozzle_flush_dataset'].includes(k);
+    for (const k in d) {
+      const v = d[k]; if (!Array.isArray(v) || !v.length || skip(k)) continue;
+      if (k === 'wipe_tower_x' || k === 'wipe_tower_y') { d[k] = Array.from({ length: Math.max(1, nPlates) }, (_, i) => v[Math.min(i, v.length - 1)]); continue; }
+      if (k === 'different_settings_to_system' || k === 'inherits_group') { d[k] = [v[0], ...Array.from({ length: N }, (_, i) => v[1 + Math.min(i, T - 1)] || ''), v[v.length - 1]]; continue; }
+      if (k === 'flush_volumes_matrix') { const m = []; for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) m.push(i === j ? '0' : '280'); d[k] = m; continue; }
+      if (k === 'flush_volumes_vector') { d[k] = Array.from({ length: 2 * N }, () => '140'); continue; }
+      if (v.length % T === 0) { const c = v.length / T; d[k] = []; for (let i = 0; i < N; i++) d[k].push(...v.slice(0, c)); }
+    }
+    d.filament_colour = colors.slice(); d.filament_multi_colour = colors.slice();
+    d.filament_self_index = colors.map((_, i) => String(i + 1));
+    d.filament_map = colors.map(() => '1');
+    d.default_filament_colour = colors.map(() => '');
+    return JSON.stringify(d, null, 4);
+  }
+  // gera 3MF no formato do Bambu Studio
+  function make3MF(res, name) {
+    name = (name || 'Chaveiro').replace(/[<>&"]/g, '');
+    const enc = new TextEncoder();
+    // monta objetos: [{name, parts:[{name,slot,mesh}], tx, ty}]
+    let objs, plates = null;
+    const bb = ms => { let b = [1e9, 1e9, 1e9, -1e9, -1e9, -1e9]; ms.forEach(m => { for (let i = 0; i < m.v.length; i += 3) for (let k = 0; k < 3; k++) { b[k] = Math.min(b[k], m.v[i + k]); b[k + 3] = Math.max(b[k + 3], m.v[i + k]); } }); return b; };
+    if (res.mode === 'camadas') {
+      const m = { v: [], t: [] };
+      res.parts.forEach(q => { const o = m.v.length / 3; m.v.push(...q.mesh.v); q.mesh.t.forEach(t => m.t.push(t + o)); });
+      objs = [{ name, parts: [{ name, slot: res.parts[0].slot, mesh: m }] }];
+    } else if (res.mode === 'encaixe') {
+      const groups = {};
+      res.parts.forEach(q => { (groups[q.obj] = groups[q.obj] || []).push(q); });
+      objs = Object.keys(groups).sort((a, b) => a - b).map(k => {
+        const ps = groups[k], b = bb(ps.map(q => q.mesh));
+        const cx = (b[0] + b[3]) / 2, cy = (b[1] + b[4]) / 2, z0 = b[2];
+        const parts = ps.map(q => { const v = q.mesh.v.slice(); for (let i = 0; i < v.length; i += 3) { v[i] -= cx; v[i + 1] -= cy; v[i + 2] -= z0; } return { name: q.name, slot: q.slot, mesh: { v, t: q.mesh.t } }; });
+        return { name: k == 0 ? name + ' - Base' : name + ' - ' + ps[0].name, parts, w: b[3] - b[0], h: b[4] - b[1], slot: ps[0].slot, hex: ps[0].hex };
+      });
+      // mesas: uma por cor (filamento) ou todas juntas
+      const keys = []; objs.forEach(o => { o.plate = res.platePerColor ? (keys.includes(o.slot) ? keys.indexOf(o.slot) : (keys.push(o.slot), keys.length - 1)) : 0; });
+      plates = res.platePerColor ? keys.map(s => ({ name: (res.colorNames && res.colorNames[s]) || ('Cor ' + s) })) : [{ name: 'ENCAIXE' }];
+      const cols = Math.ceil(Math.sqrt(plates.length)), STRIDE = 307.2;
+      plates.forEach((pl, pi) => {
+        const ox = (pi % cols) * STRIDE, oy = -Math.floor(pi / cols) * STRIDE;
+        const os = objs.filter(o => o.plate === pi);
+        if (os.length === 1) { os[0].tx = ox + 128; os[0].ty = oy + 128; return; }
+        let x = 8, y = 8, rowH = 0;
+        os.forEach(o => { if (x + o.w > 248) { x = 8; y += rowH + 6; rowH = 0; } o.tx = ox + x + o.w / 2; o.ty = oy + 248 - (y + o.h / 2); x += o.w + 6; rowH = Math.max(rowH, o.h); });
+      });
+    } else {
+      objs = [{ name, parts: res.parts.map(q => ({ name: q.name, slot: q.slot, mesh: q.mesh })) }];
+    }
+    objs.forEach(o => { if (o.tx === undefined) { o.tx = 128; o.ty = 128; } if (o.plate === undefined) o.plate = 0; });
+    if (!plates) plates = [{ name: res.mode === 'camadas' ? (res.ams ? 'AMS' : 'SEM AMS') : 'AMS' }];
+    const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"';
+    let sub = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n <metadata name="BambuStudio:3mfVersion">1</metadata>\n <resources>\n`;
+    let mid = 1;
+    objs.forEach(o => o.parts.forEach(q => { q.id = mid++; sub += meshXml(q.id, q.mesh); }));
+    sub += ' </resources>\n <build/>\n</model>\n';
+    let res3 = '', build = '', ms = `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n`, inst = '', asm = '';
+    objs.forEach((o, oi) => {
+      o.id = mid++;
+      res3 += `  <object id="${o.id}" p:UUID="${uuid(o.id)}" type="model">\n   <components>\n` + o.parts.map(q => `    <component p:path="/3D/Objects/object_1.model" objectid="${q.id}" p:UUID="${uuid(0x10000 + q.id)}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>`).join('\n') + `\n   </components>\n  </object>\n`;
+      const tr = `1 0 0 0 1 0 0 0 1 ${o.tx.toFixed(3)} ${o.ty.toFixed(3)} 0`;
+      build += `  <item objectid="${o.id}" p:UUID="${uuid(0x20000 + oi)}" transform="${tr}" printable="1"/>\n`;
+      ms += `  <object id="${o.id}">\n    <metadata key="name" value="${o.name}"/>\n    <metadata key="extruder" value="${o.parts[0].slot}"/>\n`;
+      o.parts.forEach(q => { ms += `    <part id="${q.id}" subtype="normal_part">\n      <metadata key="name" value="${q.name}"/>\n      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n      <metadata key="extruder" value="${q.slot}"/>\n    </part>\n`; });
+      ms += `  </object>\n`;
+      (plates[o.plate].inst = plates[o.plate].inst || []).push(`    <model_instance>\n      <metadata key="object_id" value="${o.id}"/>\n      <metadata key="instance_id" value="0"/>\n      <metadata key="identify_id" value="${100 + oi}"/>\n    </model_instance>\n`);
+      asm += `   <assemble_item object_id="${o.id}" instance_id="0" transform="${tr}" offset="0 0 0" />\n`;
+    });
+    plates.forEach((pl, pi) => { ms += `  <plate>\n    <metadata key="plater_id" value="${pi + 1}"/>\n    <metadata key="plater_name" value="${pl.name}"/>\n    <metadata key="locked" value="false"/>\n${(pl.inst || []).join('')}  </plate>\n`; });
+    ms += `  <assemble>\n${asm}  </assemble>\n</config>\n`;
+    const main = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n <metadata name="Application">BambuStudio-02.09.01.70</metadata>\n <metadata name="BambuStudio:3mfVersion">1</metadata>\n <metadata name="Title">${name}</metadata>\n <metadata name="Designer">Formato 3D</metadata>\n <resources>\n${res3} </resources>\n <build p:UUID="2c7c17d8-22b5-4d84-8835-1976022ea369">\n${build} </build>\n</model>\n`;
+    let cg = `<?xml version="1.0" encoding="utf-8"?>\n<custom_gcodes_per_layer>\n<plate>\n<plate_info id="1"/>\n`;
+    res.pauses.forEach(pz => {
+      cg += res.ams
+        ? `<layer top_z="${pz.topZ}" type="2" extruder="${pz.slot}" color="${pz.hex}" extra="" gcode="tool_change"/>\n`
+        : `<layer top_z="${pz.topZ}" type="1" extruder="1" color="" extra="" gcode="M400 U1"/>\n`;
+    });
+    cg += `<mode value="MultiAsSingle"/>\n</plate>\n</custom_gcodes_per_layer>\n`;
+    const files = [
+      ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n <Default Extension="png" ContentType="image/png"/>\n <Default Extension="config" ContentType="text/xml"/>\n</Types>\n`],
+      ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n <Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n</Relationships>\n`],
+      ['3D/3dmodel.model', main],
+      ['3D/_rels/3dmodel.model.rels', `<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n <Relationship Target="/3D/Objects/object_1.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n</Relationships>\n`],
+      ['3D/Objects/object_1.model', sub],
+      ['Metadata/model_settings.config', ms],
+    ];
+    if (res.mode === 'camadas' && res.pauses.length) files.push(['Metadata/custom_gcode_per_layer.xml', cg]);
+    const tpl = res.projectTemplate || (typeof window !== 'undefined' && window.BAMBU_TPL);
+    if (tpl && res.slots && res.slots.length) files.push(['Metadata/project_settings.config', projectConfig(tpl, res.slots.map(h => h.toUpperCase()), plates.length)]);
+    return zip(files.map(([n, s]) => ({ name: n, data: enc.encode(s) })));
+  }
+
+  function makeSTL(res) {
+    let nt = 0; res.parts.forEach(q => nt += q.mesh.t.length / 3);
+    const buf = new ArrayBuffer(84 + nt * 50), dv = new DataView(buf);
+    dv.setUint32(80, nt, true); let o = 84;
+    res.parts.forEach(q => {
+      const v = q.mesh.v, t = q.mesh.t;
+      for (let i = 0; i < t.length; i += 3) {
+        const a = t[i] * 3, b = t[i + 1] * 3, c = t[i + 2] * 3;
+        const ux = v[b] - v[a], uy = v[b + 1] - v[a + 1], uz = v[b + 2] - v[a + 2], wx = v[c] - v[a], wy = v[c + 1] - v[a + 1], wz = v[c + 2] - v[a + 2];
+        let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx; const l = Math.hypot(nx, ny, nz) || 1;
+        dv.setFloat32(o, nx / l, true); dv.setFloat32(o + 4, ny / l, true); dv.setFloat32(o + 8, nz / l, true); o += 12;
+        for (const k of [a, b, c]) { dv.setFloat32(o, v[k], true); dv.setFloat32(o + 4, v[k + 1], true); dv.setFloat32(o + 8, v[k + 2], true); o += 12; }
+        o += 2;
+      }
+    });
+    return new Uint8Array(buf);
+  }
+
+  const API = { analyze, build, make3MF, makeSTL, hex, lum };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.Chaveiro = API;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>// ===== Visualizador 3D (WebGL puro) com vista explodida =====
+(function(root){
+function Viewer(canvas){
+  const gl=canvas.getContext('webgl',{antialias:true,preserveDrawingBuffer:true});
+  if(!gl){this.ok=false;return;}
+  this.ok=true;this.gl=gl;this.cv=canvas;this.items=[];this.rx=-0.9;this.rz=0.5;this.zoom=1;this.explode=0;this.panY=0;
+  const vs=`attribute vec3 p;attribute vec3 n;uniform mat4 M;uniform mat3 N;varying vec3 vn;void main(){vn=N*n;gl_Position=M*vec4(p,1.);}`;
+  const fs=`precision mediump float;varying vec3 vn;uniform vec3 c;void main(){vec3 l=normalize(vec3(.4,.5,.9));float d=max(dot(normalize(vn),l),0.);float r=max(dot(normalize(vn),normalize(vec3(-.6,-.3,.4))),0.);gl_FragColor=vec4(c*(.38+.55*d)+vec3(.12)*r,1.);}`;
+  const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);return o};
+  const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(pr);gl.useProgram(pr);
+  this.pr=pr;this.aP=gl.getAttribLocation(pr,'p');this.aN=gl.getAttribLocation(pr,'n');
+  this.uM=gl.getUniformLocation(pr,'M');this.uN=gl.getUniformLocation(pr,'N');this.uC=gl.getUniformLocation(pr,'c');
+  gl.enable(gl.DEPTH_TEST);
+  let drag=null;
+  const down=(x,y)=>drag=[x,y,this.rx,this.rz];
+  const move=(x,y)=>{if(!drag)return;this.rz=drag[3]+(x-drag[0])*0.01;this.rx=Math.max(-Math.PI,Math.min(0,drag[2]+(y-drag[1])*0.01));this.draw();};
+  canvas.addEventListener('mousedown',e=>down(e.clientX,e.clientY));window.addEventListener('mousemove',e=>move(e.clientX,e.clientY));window.addEventListener('mouseup',()=>drag=null);
+  canvas.addEventListener('touchstart',e=>{const t=e.touches[0];down(t.clientX,t.clientY)},{passive:true});
+  canvas.addEventListener('touchmove',e=>{const t=e.touches[0];move(t.clientX,t.clientY);e.preventDefault()},{passive:false});
+  canvas.addEventListener('touchend',()=>drag=null);
+  canvas.addEventListener('wheel',e=>{e.preventDefault();this.zoom=Math.max(0.3,Math.min(5,this.zoom*Math.exp(-e.deltaY*0.001)));this.draw();},{passive:false});
+}
+Viewer.prototype.setParts=function(parts){
+  const gl=this.gl;if(!this.ok)return;
+  this.items.forEach(it=>{gl.deleteBuffer(it.bp);gl.deleteBuffer(it.bn)});this.items=[];
+  let r=1;
+  parts.forEach(q=>{
+    const v=q.mesh.v,t=q.mesh.t,P=new Float32Array(t.length*3),Nn=new Float32Array(t.length*3);
+    for(let i=0;i<t.length;i+=3){
+      const a=t[i]*3,b=t[i+1]*3,c=t[i+2]*3;
+      const ux=v[b]-v[a],uy=v[b+1]-v[a+1],uz=v[b+2]-v[a+2],wx=v[c]-v[a],wy=v[c+1]-v[a+1],wz=v[c+2]-v[a+2];
+      let nx=uy*wz-uz*wy,ny=uz*wx-ux*wz,nz=ux*wy-uy*wx;const l=Math.hypot(nx,ny,nz)||1;nx/=l;ny/=l;nz/=l;
+      [a,b,c].forEach((k,j)=>{const o=(i+j)*3;P[o]=v[k];P[o+1]=v[k+1];P[o+2]=v[k+2];Nn[o]=nx;Nn[o+1]=ny;Nn[o+2]=nz;r=Math.max(r,Math.abs(v[k]),Math.abs(v[k+1]));});
+    }
+    const bp=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bp);gl.bufferData(gl.ARRAY_BUFFER,P,gl.STATIC_DRAW);
+    const bn=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bn);gl.bufferData(gl.ARRAY_BUFFER,Nn,gl.STATIC_DRAW);
+    const h=q.hex,col=[1,3,5].map(o=>parseInt(h.slice(o,o+2),16)/255);
+    this.items.push({bp,bn,n:t.length,col,lvl:q.lvl!=null?q.lvl:this.items.length});
+  });
+  this.radius=r;this.draw();
+};
+function mul(a,b){const o=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s;}return o}
+Viewer.prototype.draw=function(){
+  if(!this.ok)return;const gl=this.gl,cv=this.cv;
+  const w=cv.clientWidth||400,h=cv.clientHeight||400,dpr=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  gl.viewport(0,0,cv.width,cv.height);gl.clearColor(0.09,0.1,0.13,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const n=Math.max(1,...this.items.map(it=>it.lvl+1)),exTot=this.explode*(n-1);
+  const s=0.9/(this.radius*1.15)*this.zoom,asp=cv.width/cv.height;
+  const cx=Math.cos(this.rx),sx=Math.sin(this.rx),cz=Math.cos(this.rz),sz=Math.sin(this.rz);
+  const Rz=new Float32Array([cz,sz,0,0,-sz,cz,0,0,0,0,1,0,0,0,0,1]);
+  const Rx=new Float32Array([1,0,0,0,0,cx,sx,0,0,-sx,cx,0,0,0,0,1]);
+  const R=mul(Rx,Rz);
+  const S=new Float32Array([s/Math.max(asp,1)*(asp<1?1:1),0,0,0,0,s*Math.min(asp,1)*(asp>1?asp/asp:1),0,0,0,0,-s*0.5,0,0,0,0,1]);
+  if(asp>1){S[0]=s/asp;S[5]=s}else{S[0]=s;S[5]=s*asp}
+  this.items.forEach((it,i)=>{
+    const T=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,it.lvl*this.explode-(exTot+3)/2,1]);
+    const M=mul(S,mul(R,T));
+    gl.uniformMatrix4fv(this.uM,false,M);
+    gl.uniformMatrix3fv(this.uN,false,new Float32Array([R[0],R[1],R[2],R[4],R[5],R[6],R[8],R[9],R[10]]));
+    gl.uniform3fv(this.uC,it.col);
+    gl.bindBuffer(gl.ARRAY_BUFFER,it.bp);gl.enableVertexAttribArray(this.aP);gl.vertexAttribPointer(this.aP,3,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ARRAY_BUFFER,it.bn);gl.enableVertexAttribArray(this.aN);gl.vertexAttribPointer(this.aN,3,gl.FLOAT,false,0,0);
+    gl.drawArrays(gl.TRIANGLES,0,it.n);
+  });
+};
+root.Viewer3D=Viewer;
+})(window);
+</script>
+<script>
+const $=id=>document.getElementById(id);
+let IMG=null,A=null,RES=null,state=null;
+function nomeCor(h){
+  const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/510,s=mx===mn?0:(mx-mn)/(255-Math.abs(mx+mn-255));
+  if(s<0.18||mx-mn<28){return l>0.85?'BRANCO':l<0.2?'PRETO':'CINZA'}
+  let hh;const d=mx-mn;if(mx===r)hh=((g-b)/d)%6;else if(mx===g)hh=(b-r)/d+2;else hh=(r-g)/d+4;hh=(hh*60+360)%360;
+  if(l<0.3&&hh>15&&hh<50)return 'MARROM';
+  if(hh<15||hh>=340)return l>0.7?'ROSA':'VERMELHO';if(hh<40)return 'LARANJA';if(hh<70)return 'AMARELO';
+  if(hh<165)return 'VERDE';if(hh<200)return 'CIANO';if(hh<255)return 'AZUL';if(hh<290)return 'ROXO';return 'ROSA';
+}
+function drawTo(cv,w,h,data){const same=cv.width===w&&cv.height===h;cv.width=w;cv.height=h;const c=cv.getContext('2d');const id=c.createImageData(w,h);id.data.set(data);c.putImageData(id,0,0);const z=window.ZM&&ZM[cv.id.slice(2)];if(z){if(!same)z.fit=true;z.refresh()}}
+function loadFile(f){
+  const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;const x=c.getContext('2d');x.drawImage(im,0,0);
+    IMG=x.getImageData(0,0,c.width,c.height);drawTo($('cvIn'),c.width,c.height,IMG.data);
+    ARG=null;if($('ring').value==='custom')$('ring').value='top';
+    if($('nome').value==='Chaveiro')$('nome').value=f.name.replace(/\.[^.]+$/,'');
+    doAnalyze();};
+  im.src=URL.createObjectURL(f);
+}
+window.usarImagem=(im,nome)=>{ARG=null;if($('ring').value==='custom')$('ring').value='top';IMG=im;drawTo($('cvIn'),im.width,im.height,im.data);$('nome').value=nome;doAnalyze();};
+$('drop').onclick=()=>$('file').click();$('file').onchange=e=>e.target.files[0]&&loadFile(e.target.files[0]);
+['dragover','dragenter'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.add('over')}));
+['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('over')}));
+$('drop').addEventListener('drop',e=>e.dataTransfer.files[0]&&loadFile(e.dataTransfer.files[0]));
+function status(t){$('status').textContent=t}
+function doAnalyze(){
+  if(!IMG)return;status('Analisando cores…');
+  setTimeout(()=>{try{
+    A=Chaveiro.analyze(IMG,{k:+$('k').value||0,removeBg:$('rmbg').checked});
+    const P=A.palette;const tot=P.reduce((a,p)=>a+p.count,0);
+    const dark=P.reduce((a,p,i)=>(!p.hole&&(P[a].hole||Chaveiro.lum(p.rgb)<Chaveiro.lum(P[a].rgb)))?i:a,0);
+    const hx=P.map(p=>snapHex(p.hex));
+    let baseHex=hx[dark];
+    if(nomeCor(baseHex)!=='PRETO'&&hx.includes('#FFFFFF'))baseHex='#FFFFFF';
+    state={roles:hx.map((h,i)=>P[i].hole?(P[i].holeShare>0.03?'vazado':'base'):(h===baseHex&&P.length>1)?'base':'relevo'),
+      order:P.map((p,i)=>i).sort((a,b)=>P[b].count-P[a].count),
+      hex:hx,pct:P.map(p=>p.count/tot*100),h:P.map(()=>0.4)};
+    $('baseColor').value=baseHex.toLowerCase();
+    distribuir();drawRecolor();
+  }catch(e){status('Erro: '+e.message);console.error(e)}},20);
+}
+function snapHex(h){const n=nomeCor(h);return n==='BRANCO'?'#FFFFFF':n==='PRETO'?'#000000':h}
+const FIL=[['Branco','#FFFFFF'],['Preto','#000000'],['Cinza','#8E9089'],['Prata','#A6A9AA'],['Vermelho','#C12E1F'],['Laranja','#FF6A13'],['Amarelo','#F4EE2A'],['Dourado','#E4BD68'],['Verde','#00AE42'],['Verde escuro','#1F5E3A'],['Azul','#0A2989'],['Azul claro','#0086D6'],['Roxo','#5E43B7'],['Rosa','#F55A74'],['Magenta','#EC008C'],['Marrom','#7D4E2D'],['Bege','#E8D4B0']];
+let pop=null;
+function fecharPop(){if(pop){const f=pop._onclose;pop.remove();pop=null;f&&f()}}
+document.addEventListener('mousedown',e=>{if(pop&&!pop.contains(e.target)&&!e.target.classList.contains('trocar')&&!e.target.closest('.zwrap'))fecharPop()});
+function abrirPop(btn,ci){
+  fecharPop();pop=document.createElement('div');pop.className='pop';
+  pop.innerHTML=`<div class="mut" style="margin-bottom:6px">Trocar ${nomeCor(state.hex[ci])} por:</div><div class="grid">${FIL.map(([n,h])=>`<button title="${n}" data-h="${h}" style="background:${h}"></button>`).join('')}</div>
+  <label style="margin-top:8px">Personalizada <input type="color" value="${state.hex[ci].toLowerCase()}"></label>
+  <div class="row"><button class="btn sec" data-orig style="padding:6px 10px;font-size:12px">Voltar à cor original</button></div>`;
+  document.body.appendChild(pop);
+  const r=btn.getBoundingClientRect();pop.style.left=Math.min(window.innerWidth-250,r.left+window.scrollX)+'px';pop.style.top=(r.bottom+window.scrollY+6)+'px';
+  pop.querySelectorAll('.grid button').forEach(b=>b.onclick=()=>{setCor(ci,b.dataset.h);fecharPop()});
+  const pc=pop.querySelector('input[type=color]');pc.onchange=()=>{setCor(ci,pc.value.toUpperCase());fecharPop()};
+  pop.querySelector('[data-orig]').onclick=()=>{setCor(ci,snapHex(A.palette[ci].hex));fecharPop()};
+}
+function setCor(ci,h){
+  state.hex[ci]=h.toUpperCase();
+  // trocou a cor de algo que estava "igual à base": passa a ser relevo com a cor nova
+  if(state.roles[ci]!=='relevo'&&h.toUpperCase()!==$('baseColor').value.toUpperCase())state.roles[ci]='relevo';
+  renderPal();drawRecolor();doBuild();
+}
+function drawRecolor(sel){
+  if(!A)return;const n=A.W*A.H,d=new Uint8ClampedArray(n*4);
+  const rgb=state.hex.map(h=>[1,3,5].map(o=>parseInt(h.slice(o,o+2),16)));
+  for(let i=0;i<n;i++){const l=A.labels[i];if(l<0||(state.roles[l]==='vazado'&&!(sel&&sel[i])))continue;const c=rgb[l];d[i*4]=c[0];d[i*4+1]=c[1];d[i*4+2]=c[2];d[i*4+3]=sel&&!sel[i]?70:255}
+  drawTo($('cvIn'),A.W,A.H,d);
+}
+// ===== clicar na imagem para trocar a cor =====
+function pecaEm(x,y){ // componente conectado (mesma cor) que contém (x,y)
+  const W=A.W,H=A.H,L=A.labels,s=y*W+x,lab=L[s];if(lab<0)return null;
+  const m=new Uint8Array(W*H),q=[s];m[s]=1;let n=0;
+  while(q.length){const i=q.pop();n++;const xx=i%W,yy=(i/W)|0;
+    for(const j of [xx>0?i-1:-1,xx<W-1?i+1:-1,yy>0?i-W:-1,yy<H-1?i+W:-1])if(j>=0&&!m[j]&&L[j]===lab){m[j]=1;q.push(j)}}
+  return {lab,mask:m,n};
+}
+function contarPecas(lab){const W=A.W,H=A.H,L=A.labels,seen=new Uint8Array(W*H);let c=0;
+  for(let s=0;s<W*H;s++){if(seen[s]||L[s]!==lab)continue;c++;const q=[s];seen[s]=1;
+    while(q.length){const i=q.pop(),x=i%W,y=(i/W)|0;for(const j of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1])if(j>=0&&!seen[j]&&L[j]===lab){seen[j]=1;q.push(j)}}}
+  return c}
+function compactar(){ // remove cores sem pixels e recalcula %
+  const K=A.palette.length,cnt=new Array(K).fill(0);A.labels.forEach(l=>{if(l>=0)cnt[l]++});
+  const keep=[...Array(K).keys()].filter(i=>cnt[i]>0),map=new Int16Array(K).fill(-1);keep.forEach((o,nw)=>map[o]=nw);
+  if(keep.length!==K)for(let i=0;i<A.labels.length;i++)if(A.labels[i]>=0)A.labels[i]=map[A.labels[i]];
+  const tot=cnt.reduce((a,b)=>a+b,0);
+  A.palette=keep.map(i=>({...A.palette[i],count:cnt[i]}));
+  ['hex','roles','h'].forEach(k=>state[k]=keep.map(i=>state[k][i]));
+  state.pct=keep.map(i=>cnt[i]/tot*100);
+  state.order=state.order.filter(i=>map[i]>=0).map(i=>map[i]);
+}
+function novaCor(hex,base){ // cria cor nova na paleta logo acima de "base"
+  const i=A.palette.length;A.palette.push({rgb:[1,3,5].map(o=>parseInt(hex.slice(o,o+2),16)),hex,count:0,user:true});
+  state.hex.push(hex);state.roles.push('relevo');state.h.push(state.h[base]||0.4);state.pct.push(0);
+  const pos=state.order.indexOf(base);state.order.splice(pos+1,0,i);return i;
+}
+function aplicarClique(sel,hex,todas){
+  hex=hex.toUpperCase();
+  const alvo=state.hex.findIndex((h,i)=>h===hex&&i!==sel.lab&&state.roles[i]==='relevo');
+  if(todas){
+    if(alvo>=0){for(let i=0;i<A.labels.length;i++)if(A.labels[i]===sel.lab)A.labels[i]=alvo;}
+    else{state.hex[sel.lab]=hex;if(state.roles[sel.lab]!=='relevo'&&hex!==$('baseColor').value.toUpperCase())state.roles[sel.lab]='relevo';}
+  }else{
+    if(hex===state.hex[sel.lab]&&state.roles[sel.lab]==='relevo')return;
+    const t=alvo>=0?alvo:novaCor(hex,sel.lab);
+    A.prot=A.prot||new Uint8Array(A.labels.length);
+    for(let i=0;i<sel.mask.length;i++)if(sel.mask[i]){A.labels[i]=t;A.prot[i]=1}
+  }
+  compactar();renderPal();drawRecolor();doBuild();
+}
+function abrirPopPeca(ev,sel){
+  fecharPop();const n=contarPecas(sel.lab),cur=state.hex[sel.lab];
+  pop=document.createElement('div');pop.className='pop';
+  pop.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="sw" style="background:${cur};width:16px;height:16px"></span><b>${nomeCor(cur)}</b></div>
+  <label style="margin:4px 0"><span><input type="radio" name="alc" value="1" checked> Só esta peça</span></label>
+  <label style="margin:4px 0"><span><input type="radio" name="alc" value="2"> Todas desta cor (${n} peça${n>1?'s':''})</span></label>
+  <div class="grid" style="margin-top:6px">${FIL.map(([nm,h])=>`<button title="${nm}" data-h="${h}" style="background:${h}"></button>`).join('')}</div>
+  <label style="margin-top:8px">Personalizada <input type="color" value="${cur.toLowerCase()}"></label>`;
+  document.body.appendChild(pop);
+  pop.style.left=Math.min(window.innerWidth-250,ev.pageX+8)+'px';pop.style.top=(ev.pageY+8)+'px';
+  const todas=()=>pop.querySelector('input[name=alc]:checked').value==='2';
+  const prever=()=>{if(todas()){const m=new Uint8Array(A.labels.length);A.labels.forEach((l,i)=>{if(l===sel.lab)m[i]=1});drawRecolor(m)}else drawRecolor(sel.mask)};
+  pop.querySelectorAll('input[name=alc]').forEach(r=>r.onchange=prever);prever();
+  const fim=h=>{const t=todas();fecharPop();aplicarClique(sel,h,t)};
+  pop.querySelectorAll('.grid button').forEach(b=>b.onclick=()=>fim(b.dataset.h));
+  const pc=pop.querySelector('input[type=color]');pc.onchange=()=>fim(pc.value);
+  pop._onclose=()=>drawRecolor();
+}
+function cliqueCanvas(ev,toSrc,cv){
+  if(!A||!state)return;r=cv.getBoundingClientRect();
+  const gx=(ev.clientX-r.left)/r.width*cv.width,gy=(ev.clientY-r.top)/r.height*cv.height;
+  const [sx,sy]=toSrc(gx,gy).map(Math.round);if(sx<0||sy<0||sx>=A.W||sy>=A.H)return;
+  // procura o pixel colorido mais próximo (até 3px) para facilitar o clique
+  let best=null;for(let rr=0;rr<=3&&!best;rr++)for(let dy=-rr;dy<=rr&&!best;dy++)for(let dx=-rr;dx<=rr;dx++){const x=sx+dx,y=sy+dy;if(x>=0&&y>=0&&x<A.W&&y<A.H&&A.labels[y*A.W+x]>=0){best=[x,y];break}}
+  if(!best)return;const sel=pecaEm(best[0],best[1]);if(sel)abrirPopPeca(ev,sel);
+}
+// ===== zoom / arrastar nas imagens =====
+window.ZM={};const ZM=window.ZM;
+function zoomSetup(id){
+  const wrap=$('zw'+id),cv=$('cv'+id),Z={s:1,x:0,y:0,fit:true,moved:false};ZM[id]=Z;
+  const info=document.createElement('div');info.className='zinfo';wrap.appendChild(info);
+  const apply=()=>{cv.style.width=cv.width+'px';cv.style.height=cv.height+'px';cv.style.transform=`translate(${Z.x}px,${Z.y}px) scale(${Z.s})`;
+    const fitS=fitScale();info.textContent=Math.round(Z.s/fitS*100)+'%'};
+  const fitScale=()=>Math.min(wrap.clientWidth/cv.width,wrap.clientHeight/cv.height)||1;
+  Z.fitNow=()=>{const s=fitScale();Z.s=s;Z.x=(wrap.clientWidth-cv.width*s)/2;Z.y=(wrap.clientHeight-cv.height*s)/2;Z.fit=true;apply()};
+  Z.refresh=()=>{if(Z.fit)Z.fitNow();else apply()};
+  const zoomAt=(f,px,py)=>{const ns=Math.max(fitScale()*0.5,Math.min(fitScale()*16,Z.s*f));Z.x=px-(px-Z.x)*ns/Z.s;Z.y=py-(py-Z.y)*ns/Z.s;Z.s=ns;Z.fit=false;apply()};
+  wrap.addEventListener('wheel',e=>{e.preventDefault();const r=wrap.getBoundingClientRect();zoomAt(Math.exp(-e.deltaY*0.0015),e.clientX-r.left,e.clientY-r.top)},{passive:false});
+  let drag=null,pts=new Map();
+  wrap.addEventListener('pointerdown',e=>{if(e.target.closest('.zbar'))return;pts.set(e.pointerId,[e.clientX,e.clientY]);drag={x:e.clientX,y:e.clientY,ox:Z.x,oy:Z.y,d:null};Z.moved=false;wrap.setPointerCapture(e.pointerId)});
+  wrap.addEventListener('pointermove',e=>{if(!drag)return;pts.set(e.pointerId,[e.clientX,e.clientY]);
+    if(pts.size===2){const [a,b]=[...pts.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);const r=wrap.getBoundingClientRect();
+      if(drag.d)zoomAt(d/drag.d,(a[0]+b[0])/2-r.left,(a[1]+b[1])/2-r.top);drag.d=d;Z.moved=true;return}
+    const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>4)Z.moved=true;
+    if(Z.moved){Z.x=drag.ox+dx;Z.y=drag.oy+dy;Z.fit=false;apply()}});
+  const up=e=>{pts.delete(e.pointerId);if(!pts.size)drag=null};
+  wrap.addEventListener('pointerup',up);wrap.addEventListener('pointercancel',up);
+  wrap.addEventListener('dblclick',e=>{if(!e.target.closest('.zbar'))Z.fitNow()});
+  wrap.querySelectorAll('.zbar button[data-a]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();const a=b.dataset.a,w=wrap.clientWidth/2,h=wrap.clientHeight/2;
+    if(a==='in')zoomAt(1.5,w,h);else if(a==='out')zoomAt(1/1.5,w,h);else if(a==='fit')Z.fitNow();
+    else{wrap.classList.toggle('big');b.textContent=wrap.classList.contains('big')?'✕':'⛶';setTimeout(()=>Z.fitNow(),20)}});
+  new ResizeObserver(()=>Z.refresh()).observe(wrap);
+}
+zoomSetup('In');zoomSetup('Out');
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.zwrap.big').forEach(w=>w.querySelector('[data-a=big]').click())});
+let ARG=null,posMode=false;
+function setPosMode(on){posMode=on;$('posArgola').textContent=on?'Clique na imagem para colocar a argola… (Esc cancela)':'📍 Posicionar argola na imagem';$('posArgola').classList.toggle('on',on);document.querySelectorAll('.pinArg').forEach(b=>b.style.background=on?'var(--ac)':'');
+  ['zwIn','zwOut'].forEach(i=>$(i).style.cursor=on?'crosshair':'');['cvIn','cvOut'].forEach(i=>$(i).style.cursor=on?'crosshair':'pointer')}
+$('posArgola').onclick=()=>setPosMode(!posMode);
+document.querySelectorAll('.pinArg').forEach(b=>b.onclick=e=>{e.stopPropagation();setPosMode(!posMode)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&posMode)setPosMode(false)});
+function marcarArgola(ev,toSrc,cv){const r=cv.getBoundingClientRect();const gx=(ev.clientX-r.left)/r.width*cv.width,gy=(ev.clientY-r.top)/r.height*cv.height;
+  ARG=toSrc(gx,gy);$('ring').value='custom';setPosMode(false);$('argNote').textContent='Argola posicionada. Para mudar, clique de novo em “Posicionar argola”.';doBuild()}
+$('zwIn').addEventListener('click',ev=>{if(ZM.In.moved||ev.target.closest('.zbar'))return;if(posMode)return marcarArgola(ev,(x,y)=>[x,y],$('cvIn'));cliqueCanvas(ev,(x,y)=>[x,y],$('cvIn'))});
+$('zwOut').addEventListener('click',ev=>{if(!RES||ZM.Out.moved||ev.target.closest('.zbar'))return;const M=RES.map;if(posMode)return marcarArgola(ev,(gx,gy)=>[M.x0+((gx+0.5)/M.R-M.pad)/M.mmPerSrc-0.5,M.y0+((gy+0.5)/M.R-M.pad)/M.mmPerSrc-0.5],$('cvOut'));cliqueCanvas(ev,(gx,gy)=>[M.x0+((gx+0.5)/M.R-M.pad)/M.mmPerSrc-0.5,M.y0+((gy+0.5)/M.R-M.pad)/M.mmPerSrc-0.5],$('cvOut'))});
+['cvIn','cvOut'].forEach(i=>{$(i).style.cursor='pointer';$(i).title='Clique numa peça para trocar a cor'});
+function renderPal(){
+  const el=$('pal');el.innerHTML='';
+  state.order.forEach((ci,pos)=>{
+    const d=document.createElement('div');d.className='pal';
+    const orig=A.palette[ci].hex,cur=state.hex[ci],mud=snapHex(orig)!==cur;
+    d.innerHTML=`<span class="orig" title="cor detectada na imagem: ${orig}" style="background:${orig}"></span>
+    <button class="trocar" title="Clique para trocar a cor" style="background:${cur}"></button>
+    <span style="flex:1;line-height:1.15;font-size:12px;min-width:0">${nomeCor(cur)}<br><span class="mut" style="font-size:11px">${state.pct[ci]<1?state.pct[ci].toFixed(1):state.pct[ci].toFixed(0)}% · ${cur}${A.palette[ci].hole?' · furo interno':''}${state.roles[ci]==='base'?' · mostra a base':state.roles[ci]==='vazado'?' · furo':mud?' · alterada':''}</span></span>
+    <input class="alt" type="number" step="0.2" min="0.2" value="${state.h[ci]}" title="Altura desta cor (mm)" ${state.roles[ci]!=='relevo'?'disabled':''}><span class="mut" style="margin-left:-4px">mm</span>
+    <select title="Relevo: imprime com esta cor, em cima da base. Plano: não sobe, aparece a cor da base. Vazado: vira furo."><option value="relevo">Relevo</option><option value="base">Plano</option><option value="vazado">Vazado</option></select><button class="mv" title="subir">▲</button><button class="mv" title="descer">▼</button>`;
+    const tb=d.querySelector('.trocar'),sel=d.querySelector('select'),[up,dn]=d.querySelectorAll('.mv');
+    tb.onclick=()=>abrirPop(tb,ci);
+    const al=d.querySelector('.alt');if(state.roles[ci]!=='relevo')al.value='';
+    al.onchange=()=>{const L=+$('layer').value||0.2;let v=Math.max(L,Math.round((+al.value||L)/L)*L);state.h[ci]=+v.toFixed(2);al.value=state.h[ci];doBuild()};
+    sel.value=state.roles[ci];
+    sel.onchange=()=>{state.roles[ci]=sel.value;renderPal();doBuild()};
+    up.onclick=()=>{if(pos<state.order.length-1){[state.order[pos],state.order[pos+1]]=[state.order[pos+1],state.order[pos]];renderPal();doBuild()}};
+    dn.onclick=()=>{if(pos>0){[state.order[pos],state.order[pos-1]]=[state.order[pos-1],state.order[pos]];renderPal();doBuild()}};
+    el.prepend(d);
+  });
+}
+let tm=null;
+function doBuild(){
+  if(!A)return;clearTimeout(tm);status('Gerando modelo…');
+  tm=setTimeout(()=>{try{
+    const m=$('mode').value;
+    const pal={...A,palette:A.palette.map((p,i)=>({...p,hex:state.hex[i],rgb:[1,3,5].map(o=>parseInt(state.hex[i].slice(o,o+2),16))}))};
+    RES=Chaveiro.build(pal,{size:+$('size').value,border:+$('border').value,ring:$('ring').value,ringAt:ARG,ringD:+$('ringD').value,holeD:+$('holeD').value,
+      minArea:+$('minArea').value,layer:+$('layer').value,baseH:+$('baseH').value,
+      heights:state.h,mode:(m==='partes'||m==='encaixe')?m:'camadas',flush:$('flush').checked,clear:+$('clear').value,roles:state.roles,order:state.order,
+      baseColor:$('baseColor').value.toUpperCase(),overlap:0.4});
+    RES.ams=(m==='ams');
+    RES.platePerColor=(m==='encaixe'&&$('porMesa').checked);
+    RES.colorNames={};const usados={};RES.parts.forEach(p=>{if(RES.colorNames[p.slot])return;let n=nomeCor(p.hex);usados[n]=(usados[n]||0)+1;RES.colorNames[p.slot]=usados[n]>1?n+' '+usados[n]:n});
+    drawTo($('cvOut'),RES.preview.w,RES.preview.h,RES.preview.data);
+    V&&V.setParts(RES.parts);
+    const tris=RES.parts.reduce((a,p)=>a+p.mesh.t.length/3,0);
+    status(`Tamanho final: ${RES.dims[0].toFixed(1)} × ${RES.dims[1].toFixed(1)} × ${RES.totalH.toFixed(2)} mm · ${tris.toLocaleString()} triângulos`);
+    showSteps(m);['b3mf','bstl','bcopy'].forEach(i=>$(i).disabled=false);
+  }catch(e){status('Erro: '+e.message);console.error(e)}},60);
+}
+function sw(h){return `<span class="sw" style="background:${h}"></span>`}
+function showSteps(m){
+  const L=RES.layer,bc=$('baseColor').value.toUpperCase();
+  if(m==='encaixe'){
+    const objs={};RES.parts.forEach(p=>{(objs[p.obj]=objs[p.obj]||[]).push(p)});
+    $('steps').innerHTML=Object.keys(objs).map(k=>{const p=objs[k][objs[k].length-1];return `${sw(p.hex)}<b>${k==0?'Base com rebaixos':'Peça '+nomeCor(p.hex)}</b> — filamento ${p.slot} · ${k==0?'altura '+RES.totalH.toFixed(2):'espessura '+(p.z1-p.z0).toFixed(2)} mm`}).join('<br>')+
+      `<br><span class="mut">${RES.platePerColor?'No 3MF cada cor vai numa mesa separada (a base com o molde é uma peça só, na mesa da cor dela).':'Todas as peças na mesma mesa.'} As peças saem separadas. Depois de impressas, encaixe cada uma no rebaixo da base: o topo fica todo nivelado (${RES.totalH.toFixed(1)} mm). Folga: ${$('clear').value} mm.</span>`;
+    $('desc').textContent=`Chaveiro de encaixe - base ${nomeCor(bc)} + peças: `+[...new Set(RES.parts.filter(p=>p.obj>0).map(p=>nomeCor(p.hex)))].join(', ');return;
+  }
+  if(m==='partes'){
+    $('steps').innerHTML=RES.parts.map(p=>`${sw(p.hex)}<b>${p.name.startsWith('Base')?'Base':p.name==='Borda'?'Borda (cor da base)':nomeCor(p.hex)}</b> — filamento ${p.slot} · Z ${p.z0.toFixed(2)}→${p.z1.toFixed(2)} mm`).join('<br>')+'<br><span class="mut">Cada parte já vem com o filamento definido. Confira o mapeamento das cores no AMS.</span>';
+    $('desc').textContent=`Partes por cor (AMS): `+RES.parts.map(p=>`${nomeCor(p.hex)} (filamento ${p.slot})`).join(', ');return;
+  }
+  let lines=[`${sw(bc)}<b>${nomeCor(bc)}</b> — começa na camada 1`];let d=[`${nomeCor(bc)} (1)`];
+  RES.pauses.forEach(p=>{lines.push(`${sw(p.hex)}<b>${nomeCor(p.hex)}</b> — ${m==='ams'?'troca automática':'PAUSA'} na camada <b>${p.layer}</b> (Z ${p.topZ.toFixed(2)} mm) · essa cor tem ${(RES.zs[p.ci][1]-RES.zs[p.ci][0]).toFixed(1)} mm`);d.push(`${nomeCor(p.hex)} (${p.layer})`)});
+  const tot=Math.round(RES.totalH/L);
+  lines.push(`<span class="mut">Total: ${tot} camadas de ${L} mm (1ª camada deve ser ${L} mm). ${m==='sem'?'As pausas já vão no 3MF — na pausa troque o filamento e continue.':'As trocas já vão no 3MF — confirme as cores no AMS.'}</span>`);
+  $('steps').innerHTML=lines.join('<br>');
+  $('desc').textContent=`ORDEM DAS CORES: Z - ${RES.totalH.toFixed(1)}mm\n${$('nome').value} - ${d.join(', ')}`;
+}
+function baixar(data,nome,tipo){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:tipo}));a.download=nome;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
+$('b3mf').onclick=()=>{const n=$('nome').value||'Chaveiro';baixar(Chaveiro.make3MF(RES,n),n+'.3mf','model/3mf')};
+$('bstl').onclick=()=>{const n=$('nome').value||'Chaveiro';baixar(Chaveiro.makeSTL(RES),n+'.stl','model/stl')};
+$('bcopy').onclick=()=>{navigator.clipboard.writeText($('desc').textContent).then(()=>status('Descrição copiada.'),()=>status('Não consegui copiar — selecione o texto manualmente.'))};
+const V=new Viewer3D($('cv3d'));window.V=V;if(!V.ok)$('cv3d').outerHTML='<div class="mut">Seu navegador não suporta WebGL.</div>';
+function setExp(v){$('exp').value=v;V.explode=+v;V.draw();$('bExp').textContent=V.explode>0?'Juntar peças':'Vista explodida'}
+let anim=null;function animTo(t){cancelAnimationFrame(anim);const f=()=>{const d=t-V.explode;if(Math.abs(d)<0.05){setExp(t);return}setExp(V.explode+d*0.18);anim=requestAnimationFrame(f)};f()}
+$('exp').oninput=e=>{cancelAnimationFrame(anim);setExp(e.target.value)};
+$('bExp').onclick=()=>{if(!(V.explode>0)){V.rx=-1.2;V.rz=0.6}animTo(V.explode>0?0:10)};
+$('bTop').onclick=()=>{V.rx=0;V.rz=0;V.draw()};$('bIso').onclick=()=>{V.rx=-0.9;V.rz=0.5;V.draw()};
+window.addEventListener('resize',()=>V.draw());
+$('k').onchange=doAnalyze;$('rmbg').onchange=doAnalyze;
+['size','border','baseColor','layer','baseH','ring','ringD','holeD','minArea'].forEach(i=>$(i).addEventListener('change',doBuild));
+function modoUI(){const m=$('mode').value;$('optFlush').hidden=m!=='partes';$('optEnc').hidden=m!=='encaixe';
+  $('nivNote').textContent=(m==='sem'||m==='ams')?'Em camadas com pausa as cores ficam em degraus. Ao clicar em “Altura padrão” o modo muda para “Partes por cor (AMS)”, que deixa tudo plano.':''}
+$('ring').addEventListener('change',()=>{if($('ring').value==='custom'&&!ARG)setPosMode(true)});
+$('mode').onchange=()=>{modoUI();if($('mode').value==='encaixe')nivelar();else{renderPal();doBuild()}};modoUI();
+function nivelar(){if(!state)return;
+  if($('mode').value==='sem'||$('mode').value==='ams'){$('mode').value='partes';modoUI();
+    $('nivNote').innerHTML='<b style="color:var(--ac)">Mudei o modo para “Partes por cor (AMS)”</b>: com pausas por camada não existe topo plano. Se preferir imprimir as cores separadas e encaixar, escolha “Encaixe”.';}const L=+$('layer').value||0.2;const rel=state.order.filter(i=>state.roles[i]==='relevo');
+  const alvo=(+$('totalH').value||0)-(+$('baseH').value||0);const h=Math.max($('mode').value==='encaixe'?1.0:L,Math.round(alvo/L)*L||0);state.h=state.h.map(()=>+h.toFixed(2));$('flush').checked=true;renderPal();doBuild()}
+$('nivelar').onclick=nivelar;
+['flush','clear','porMesa'].forEach(i=>$(i).addEventListener('change',doBuild));
+function distribuir(){if(!state)return;const L=+$('layer').value||0.2,B=+$('baseH').value,rel=state.order.filter(i=>state.roles[i]==='relevo'),n=Math.max(1,rel.length),tot=+$('totalH').value;
+  let h=($('mode').value==='partes'||$('mode').value==='encaixe')?Math.max(L,tot-B):Math.max(2*L,Math.floor((tot-B)/n/L+1e-6)*L);
+  state.h=state.h.map(()=>+h.toFixed(2));renderPal();doBuild()}
+$('distrib').onclick=distribuir;
+$('nome').oninput=()=>RES&&showSteps($('mode').value);
+</script>
+<script>
+// ===== Etapa 1: remover fundo =====
+(function(){
+const $=id=>document.getElementById(id);
+let SRC=null,W=0,H=0,seeds=[],OUT=null,nomeBase='Chaveiro';
+function show(n){$('t1').style.display=n===1?'':'none';$('t2').style.display=n===2?'':'none';$('tab1').classList.toggle('on',n===1);$('tab2').classList.toggle('on',n===2);if(n===2&&window.V)setTimeout(()=>V.draw(),30)}
+$('tab1').onclick=()=>show(1);$('tab2').onclick=()=>show(2);
+function load(f){
+  const im=new Image();im.onload=()=>{
+    const sc=Math.min(1,1600/Math.max(im.naturalWidth,im.naturalHeight));
+    W=Math.round(im.naturalWidth*sc);H=Math.round(im.naturalHeight*sc);
+    const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.drawImage(im,0,0,W,H);
+    SRC=x.getImageData(0,0,W,H);seeds=[];nomeBase=f.name.replace(/\.[^.]+$/,'');
+    // PNG que já tem transparência: desliga o automático
+    let a=false;for(let i=3;i<SRC.data.length;i+=4)if(SRC.data[i]<250){a=true;break}
+    $('autoBg').checked=!a;
+    run();};
+  im.src=URL.createObjectURL(f);
+}
+$('drop1').onclick=()=>$('file1').click();$('file1').onchange=e=>e.target.files[0]&&load(e.target.files[0]);
+['dragover','dragenter'].forEach(ev=>$('drop1').addEventListener(ev,e=>{e.preventDefault();$('drop1').classList.add('over')}));
+['dragleave','drop'].forEach(ev=>$('drop1').addEventListener(ev,e=>{e.preventDefault();$('drop1').classList.remove('over')}));
+$('drop1').addEventListener('drop',e=>e.dataTransfer.files[0]&&load(e.dataTransfer.files[0]));
+function run(){
+  if(!SRC)return;
+  const d=SRC.data,N=W*H,tol=+$('tol').value,t2=tol*tol;
+  const rm=new Uint8Array(N);for(let i=0;i<N;i++)if(d[i*4+3]<128)rm[i]=1;
+  const dist=(i,c)=>{const o=i*4;return (d[o]-c[0])**2+(d[o+1]-c[1])**2+(d[o+2]-c[2])**2};
+  function flood(starts,col){const st=starts.slice();while(st.length){const i=st.pop();if(rm[i]===2||dist(i,col)>t2)continue;if(rm[i]!==1)rm[i]=2;else rm[i]=2;
+    const x=i%W,y=(i/W)|0;if(x>0)st.push(i-1);if(x<W-1)st.push(i+1);if(y>0)st.push(i-W);if(y<H-1)st.push(i+W);}}
+  function global(col){for(let i=0;i<N;i++)if(dist(i,col)<=t2)rm[i]=2}
+  if($('autoBg').checked){
+    // cor do fundo = mediana das bordas
+    const b=[];for(let x=0;x<W;x+=Math.max(1,W>>7)){b.push(x,(H-1)*W+x)}for(let y=0;y<H;y+=Math.max(1,H>>7)){b.push(y*W,y*W+W-1)}
+    const cs=b.filter(i=>d[i*4+3]>=128).map(i=>[d[i*4],d[i*4+1],d[i*4+2]]);
+    if(cs.length){const med=[0,1,2].map(k=>cs.map(c=>c[k]).sort((a,b)=>a-b)[cs.length>>1]);
+      if($('bgMode').value==='global')global(med);else flood(b.filter(i=>d[i*4+3]>=128),med);}
+  }
+  seeds.forEach(s=>{const i=s.y*W+s.x,col=[d[i*4],d[i*4+1],d[i*4+2]];if(s.global)global(col);else flood([i],col)});
+  // encolher borda
+  let mask=new Uint8Array(N);for(let i=0;i<N;i++)mask[i]=rm[i]?0:1;
+  for(let p=0;p<+$('shrink').value;p++){const m2=new Uint8Array(mask);for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;if(!mask[i])continue;
+    if((x>0&&!mask[i-1])||(x<W-1&&!mask[i+1])||(y>0&&!mask[i-W])||(y<H-1&&!mask[i+W]))m2[i]=0}mask=m2}
+  // remove ilhas soltas muito pequenas
+  const seen=new Uint8Array(N),q=new Int32Array(N),minA=Math.max(4,N*0.00005);
+  for(let s=0;s<N;s++){if(seen[s]||!mask[s])continue;let h=0,t=0;q[t++]=s;seen[s]=1;
+    while(h<t){const i=q[h++],x=i%W,y=(i/W)|0;for(const n of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1])if(n>=0&&mask[n]&&!seen[n]){seen[n]=1;q[t++]=n}}
+    if(t<minA)for(let j=0;j<t;j++)mask[q[j]]=0}
+  OUT=new ImageData(W,H);const o=OUT.data;
+  for(let i=0;i<N;i++){o[i*4]=d[i*4];o[i*4+1]=d[i*4+1];o[i*4+2]=d[i*4+2];o[i*4+3]=mask[i]?255:0}
+  if($('feather').checked){for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;if(!mask[i])continue;let s=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)s+=mask[i+dy*W+dx];if(s<9)o[i*4+3]=Math.round(255*Math.min(1,(s+1)/9+0.25))}}
+  const cv=$('cvBg');cv.width=W;cv.height=H;cv.getContext('2d').putImageData(OUT,0,0);
+  let k=0;for(let i=0;i<N;i++)if(mask[i])k++;
+  $('st1').textContent=`${W}×${H}px · ${(100-k/N*100).toFixed(1)}% removido · ${seeds.length} clique(s)`;
+  $('go2').disabled=$('dlPng').disabled=false;
+}
+$('cvBg').addEventListener('click',e=>{if(!SRC)return;const r=e.target.getBoundingClientRect();
+  // canvas com object-fit: contain
+  const s=Math.min(r.width/W,r.height/H),ox=(r.width-W*s)/2,oy=(r.height-H*s)/2;
+  const x=Math.floor((e.clientX-r.left-ox)/s),y=Math.floor((e.clientY-r.top-oy)/s);if(x<0||y<0||x>=W||y>=H)return;
+  seeds.push({x,y,global:$('bgMode').value==='global'});run()});
+$('undo1').onclick=()=>{seeds.pop();run()};$('reset1').onclick=()=>{seeds=[];$('tol').value=45;$('shrink').value=1;$('tolV').textContent='45';$('shrinkV').textContent='1 px';run()};
+$('tol').oninput=()=>{$('tolV').textContent=$('tol').value};$('tol').onchange=run;
+$('shrink').oninput=()=>{$('shrinkV').textContent=$('shrink').value+' px';run()};
+['feather','autoBg','bgMode'].forEach(i=>$(i).onchange=run);
+$('dlPng').onclick=()=>$('cvBg').toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=nomeBase+'.png';document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),500)},'image/png');
+$('go2').onclick=()=>{window.usarImagem(OUT,nomeBase);show(2)};
+window.irPara=show;
+})();
+</script>
+</body>
+</html>
